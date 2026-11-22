@@ -20,8 +20,8 @@ import {
   recordFailedAttempt,
 } from './delivery';
 
-/** n8n answers within this time or the attempt counts as failed. */
-const DELIVERY_TIMEOUT_MS = 10_000;
+/** n8n answers once the email is sent (or failed), within this time or the attempt counts as failed. */
+const DELIVERY_TIMEOUT_MS = 30_000;
 /** While one delivery runs, no other may start for the same event. */
 const LEASE_MS = 60_000;
 /** The sweeper leaves due events alone this long, so it never races the scheduled retry. */

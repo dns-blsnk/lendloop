@@ -36,6 +36,7 @@ import type * as loans_mutations from "../loans/mutations.js";
 import type * as loans_queries from "../loans/queries.js";
 import type * as loans_tables from "../loans/tables.js";
 import type * as loans_views from "../loans/views.js";
+import type * as seed_internal from "../seed/internal.js";
 import type * as tools_index from "../tools/index.js";
 import type * as tools_model from "../tools/model.js";
 import type * as tools_mutations from "../tools/mutations.js";
@@ -83,6 +84,7 @@ declare const fullApi: ApiFromModules<{
   "loans/queries": typeof loans_queries;
   "loans/tables": typeof loans_tables;
   "loans/views": typeof loans_views;
+  "seed/internal": typeof seed_internal;
   "tools/index": typeof tools_index;
   "tools/model": typeof tools_model;
   "tools/mutations": typeof tools_mutations;

@@ -1,0 +1,184 @@
+{
+  "id": "lendloopOverdue1",
+  "name": "LendLoop – Overdue reminders",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Every day at 09:00 UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "Run now",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calls a signed Convex endpoint: HMAC-SHA256 over \"timestamp.body\" with the n8n-to-Convex\n// secret, exactly as packages/contracts/src/integration/signature.ts verifies it. Every attempt is\n// signed afresh (a retry must not resend a stale timestamp), and only failures that can heal are\n// retried: network errors, 5xx, 408 and 429. Anything else fails the run at once, which hands it to\n// the error workflow.\nconst crypto = require('crypto');\n\nconst CONVEX_MAX_TRIES = 3;\nconst CONVEX_RETRY_WAIT_MS = 2000;\nconst CONVEX_TIMEOUT_MS = 10000;\nconst RETRYABLE_STATUSES = [408, 429];\n\nfunction signForConvex(body) {\n  const timestamp = String(Math.floor(Date.now() / 1000));\n  const signature = crypto\n    .createHmac('sha256', $env.LENDLOOP_N8N_TO_CONVEX_SECRET)\n    .update(`${timestamp}.${body}`)\n    .digest('hex');\n  return { timestamp, signature };\n}\n\nasync function postToConvex(helpers, path, payload) {\n  const body = JSON.stringify(payload);\n  let lastProblem = '';\n  for (let attempt = 1; attempt <= CONVEX_MAX_TRIES; attempt += 1) {\n    const { timestamp, signature } = signForConvex(body);\n    let status = 0;\n    let text = '';\n    try {\n      const response = await helpers.httpRequest({\n        method: 'POST',\n        url: `${$env.LENDLOOP_CONVEX_SITE_URL}${path}`,\n        headers: {\n          'content-type': 'application/json',\n          'x-lendloop-timestamp': timestamp,\n          'x-lendloop-signature': signature,\n        },\n        body,\n        json: false,\n        timeout: CONVEX_TIMEOUT_MS,\n        returnFullResponse: true,\n        ignoreHttpStatusErrors: true,\n      });\n      status = response.statusCode;\n      text = typeof response.body === 'string' ? response.body : JSON.stringify(response.body);\n    } catch (error) {\n      lastProblem = `network error (${error.name})`;\n    }\n    if (status >= 200 && status < 300) {\n      return text === '' ? null : JSON.parse(text);\n    }\n    if (status !== 0) {\n      lastProblem = `HTTP ${status}`;\n      const canHeal = status >= 500 || RETRYABLE_STATUSES.includes(status);\n      if (!canHeal) {\n        break;\n      }\n    }\n    if (attempt < CONVEX_MAX_TRIES) {\n      await new Promise((resolve) => setTimeout(resolve, CONVEX_RETRY_WAIT_MS * attempt));\n    }\n  }\n  throw new Error(`Convex ${path} failed: ${lastProblem}`);\n}\n\n// Asks Convex for today's reminders. The body is empty on purpose: Convex decides which day it is.\nconst { loans } = await postToConvex(this.helpers, '/n8n/overdue-loans', {});\nreturn loans.map((loan) => ({ json: loan }));\n"
+      },
+      "name": "Fetch overdue loans",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map((item) => {\n  const loan = item.json;\n  const days = loan.daysOverdue === 1 ? '1 day' : `${loan.daysOverdue} days`;\n  return {\n    json: {\n      loanId: loan.loanId,\n      reminderKey: loan.reminderKey,\n      to: loan.borrower.email,\n      subject: `Reminder: please return the ${loan.toolName}`,\n      text:\n        `Hi ${loan.borrower.firstName},\\n\\n` +\n        `The ${loan.toolName} was due back on ${loan.endDate} (${days} ago). ` +\n        `Please return it to its owner, who will mark it returned in LendLoop.\\n\\n— LendLoop`,\n    },\n  };\n});\n"
+      },
+      "name": "Compose reminder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "LendLoop <noreply@lendloop.local>",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Send reminder",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        660,
+        300
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "lendloopMailpit1",
+          "name": "Mailpit (local SMTP)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calls a signed Convex endpoint: HMAC-SHA256 over \"timestamp.body\" with the n8n-to-Convex\n// secret, exactly as packages/contracts/src/integration/signature.ts verifies it. Every attempt is\n// signed afresh (a retry must not resend a stale timestamp), and only failures that can heal are\n// retried: network errors, 5xx, 408 and 429. Anything else fails the run at once, which hands it to\n// the error workflow.\nconst crypto = require('crypto');\n\nconst CONVEX_MAX_TRIES = 3;\nconst CONVEX_RETRY_WAIT_MS = 2000;\nconst CONVEX_TIMEOUT_MS = 10000;\nconst RETRYABLE_STATUSES = [408, 429];\n\nfunction signForConvex(body) {\n  const timestamp = String(Math.floor(Date.now() / 1000));\n  const signature = crypto\n    .createHmac('sha256', $env.LENDLOOP_N8N_TO_CONVEX_SECRET)\n    .update(`${timestamp}.${body}`)\n    .digest('hex');\n  return { timestamp, signature };\n}\n\nasync function postToConvex(helpers, path, payload) {\n  const body = JSON.stringify(payload);\n  let lastProblem = '';\n  for (let attempt = 1; attempt <= CONVEX_MAX_TRIES; attempt += 1) {\n    const { timestamp, signature } = signForConvex(body);\n    let status = 0;\n    let text = '';\n    try {\n      const response = await helpers.httpRequest({\n        method: 'POST',\n        url: `${$env.LENDLOOP_CONVEX_SITE_URL}${path}`,\n        headers: {\n          'content-type': 'application/json',\n          'x-lendloop-timestamp': timestamp,\n          'x-lendloop-signature': signature,\n        },\n        body,\n        json: false,\n        timeout: CONVEX_TIMEOUT_MS,\n        returnFullResponse: true,\n        ignoreHttpStatusErrors: true,\n      });\n      status = response.statusCode;\n      text = typeof response.body === 'string' ? response.body : JSON.stringify(response.body);\n    } catch (error) {\n      lastProblem = `network error (${error.name})`;\n    }\n    if (status >= 200 && status < 300) {\n      return text === '' ? null : JSON.parse(text);\n    }\n    if (status !== 0) {\n      lastProblem = `HTTP ${status}`;\n      const canHeal = status >= 500 || RETRYABLE_STATUSES.includes(status);\n      if (!canHeal) {\n        break;\n      }\n    }\n    if (attempt < CONVEX_MAX_TRIES) {\n      await new Promise((resolve) => setTimeout(resolve, CONVEX_RETRY_WAIT_MS * attempt));\n    }\n  }\n  throw new Error(`Convex ${path} failed: ${lastProblem}`);\n}\n\n// Generated by n8n/src/build.mjs. Reports \"sent\" without any error text (it can hold addresses).\nfor (const [index] of $input.all().entries()) {\n  const source = $('Compose reminder').itemMatching(index).json;\n  await postToConvex(this.helpers, '/n8n/reminders', {\n    loanId: source.loanId,\n    reminderKey: source.reminderKey,\n    status: 'sent',\n  });\n}\nreturn $input.all();\n"
+      },
+      "name": "Report \"sent\"",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calls a signed Convex endpoint: HMAC-SHA256 over \"timestamp.body\" with the n8n-to-Convex\n// secret, exactly as packages/contracts/src/integration/signature.ts verifies it. Every attempt is\n// signed afresh (a retry must not resend a stale timestamp), and only failures that can heal are\n// retried: network errors, 5xx, 408 and 429. Anything else fails the run at once, which hands it to\n// the error workflow.\nconst crypto = require('crypto');\n\nconst CONVEX_MAX_TRIES = 3;\nconst CONVEX_RETRY_WAIT_MS = 2000;\nconst CONVEX_TIMEOUT_MS = 10000;\nconst RETRYABLE_STATUSES = [408, 429];\n\nfunction signForConvex(body) {\n  const timestamp = String(Math.floor(Date.now() / 1000));\n  const signature = crypto\n    .createHmac('sha256', $env.LENDLOOP_N8N_TO_CONVEX_SECRET)\n    .update(`${timestamp}.${body}`)\n    .digest('hex');\n  return { timestamp, signature };\n}\n\nasync function postToConvex(helpers, path, payload) {\n  const body = JSON.stringify(payload);\n  let lastProblem = '';\n  for (let attempt = 1; attempt <= CONVEX_MAX_TRIES; attempt += 1) {\n    const { timestamp, signature } = signForConvex(body);\n    let status = 0;\n    let text = '';\n    try {\n      const response = await helpers.httpRequest({\n        method: 'POST',\n        url: `${$env.LENDLOOP_CONVEX_SITE_URL}${path}`,\n        headers: {\n          'content-type': 'application/json',\n          'x-lendloop-timestamp': timestamp,\n          'x-lendloop-signature': signature,\n        },\n        body,\n        json: false,\n        timeout: CONVEX_TIMEOUT_MS,\n        returnFullResponse: true,\n        ignoreHttpStatusErrors: true,\n      });\n      status = response.statusCode;\n      text = typeof response.body === 'string' ? response.body : JSON.stringify(response.body);\n    } catch (error) {\n      lastProblem = `network error (${error.name})`;\n    }\n    if (status >= 200 && status < 300) {\n      return text === '' ? null : JSON.parse(text);\n    }\n    if (status !== 0) {\n      lastProblem = `HTTP ${status}`;\n      const canHeal = status >= 500 || RETRYABLE_STATUSES.includes(status);\n      if (!canHeal) {\n        break;\n      }\n    }\n    if (attempt < CONVEX_MAX_TRIES) {\n      await new Promise((resolve) => setTimeout(resolve, CONVEX_RETRY_WAIT_MS * attempt));\n    }\n  }\n  throw new Error(`Convex ${path} failed: ${lastProblem}`);\n}\n\n// Generated by n8n/src/build.mjs. Reports \"failed\" without any error text (it can hold addresses).\nfor (const [index] of $input.all().entries()) {\n  const source = $('Compose reminder').itemMatching(index).json;\n  await postToConvex(this.helpers, '/n8n/reminders', {\n    loanId: source.loanId,\n    reminderKey: source.reminderKey,\n    status: 'failed',\n    error: 'The email could not be sent.',\n  });\n}\nreturn $input.all();\n"
+      },
+      "name": "Report \"failed\"",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Every day at 09:00 UTC": {
+      "main": [
+        [
+          {
+            "node": "Fetch overdue loans",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run now": {
+      "main": [
+        [
+          {
+            "node": "Fetch overdue loans",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch overdue loans": {
+      "main": [
+        [
+          {
+            "node": "Compose reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose reminder": {
+      "main": [
+        [
+          {
+            "node": "Send reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send reminder": {
+      "main": [
+        [
+          {
+            "node": "Report \"sent\"",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Report \"failed\"",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "lendloopErrors01",
+    "timezone": "UTC"
+  },
+  "active": true,
+  "pinData": {},
+  "tags": []
+}

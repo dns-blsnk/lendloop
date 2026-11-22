@@ -78,7 +78,8 @@ const rawBuilderMessage =
   'Build functions with the wrappers in convex/functions.ts so every function declares who may call it.';
 
 const sourceFiles = ['**/*.ts', '**/*.tsx'];
-const exemptFromLimits = ['**/*.spec.ts', '**/*.spec.tsx', '**/test/**'];
+// Tests and demo seed data are fixtures: literal dates and offsets are the point.
+const exemptFromLimits = ['**/*.spec.ts', '**/*.spec.tsx', '**/test/**', '**/convex/seed/**'];
 
 export default tseslint.config(
   {
@@ -89,6 +90,8 @@ export default tseslint.config(
       '**/coverage/**',
       '**/convex/_generated/**',
       '**/next-env.d.ts',
+      // Bodies of n8n Code nodes: they run inside n8n with its globals ($env, $input, top-level await).
+      'n8n/src/code/**',
     ],
   },
   js.configs.recommended,

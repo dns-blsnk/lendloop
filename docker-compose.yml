@@ -43,6 +43,8 @@ services:
       - '127.0.0.1:5678:5678'
     volumes:
       - n8n-data:/home/node/.n8n
+      # Workflow and credential JSON for `scripts/n8n-setup.sh`; read-only.
+      - ./n8n:/lendloop-n8n:ro
     # The credential encryption key is read from a file, so it is not part of the environment
     # that workflows can see through $env.
     secrets:

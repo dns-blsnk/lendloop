@@ -61,7 +61,7 @@ them. The rest are reviewed by hand.
 | `max-lines` per file      | 300                              |
 | `no-nested-ternary`       | on                               |
 
-Tests are exempt from size limits and `no-magic-numbers`.
+Tests and the demo seed are exempt from size limits and `no-magic-numbers`.
 
 ### TypeScript [lint]
 

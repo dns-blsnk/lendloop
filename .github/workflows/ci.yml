@@ -43,6 +43,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: n8n exports are current and free of secrets
+        run: pnpm n8n:check
+
       # Public values only (the publishable key and Convex URL end up in the browser bundle anyway);
       # set them as repository variables. The build validates them and fails fast without them.
       - name: Build
