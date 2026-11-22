@@ -1,4 +1,5 @@
 export {
+  assertCan,
   getViewerUser,
   requireAdminUser,
   requireIdentity,

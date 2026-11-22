@@ -12,6 +12,9 @@ export const toolsTables = {
     description: v.string(),
     status: zodToConvex(toolStatusSchema),
   })
+    // Kept for its order: the unfiltered board is newest first, not grouped by category.
+    // eslint-disable-next-line @convex-dev/no-duplicate-indexes -- needs _creationTime order
+    .index('by_status', ['status'])
     .index('by_status_category', ['status', 'category'])
     .index('by_owner_status', ['ownerId', 'status']),
 };

@@ -96,3 +96,15 @@ export const lenderSchema = z.object({
 });
 
 export type Lender = z.infer<typeof lenderSchema>;
+
+/** A tool card for signed-in users. The backend adds the tool id. */
+export const toolCardSchema = toolFieldsSchema.extend({
+  availability: availabilitySchema,
+  lender: lenderSchema,
+  isMine: z.boolean(),
+});
+
+export type ToolCard = z.infer<typeof toolCardSchema>;
+
+/** Most tools one list returns; the board is a neighbourhood, not a marketplace. */
+export const MAX_TOOLS_PER_LIST = 200;

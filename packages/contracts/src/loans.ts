@@ -102,12 +102,13 @@ export const LOAN_TRANSITIONS: Readonly<Record<LoanAction, LoanTransition>> = {
     beforeStartOnly: false,
   },
   [LoanAction.WITHDRAW_FOR_REMOVED_TOOL]: {
-    // The listing was deleted or removed by an admin; loans that have not started go with it.
+    // The listing was deleted or removed by an admin. Removal is refused while an approved loan is
+    // under way, so every approved loan this reaches has not started yet.
     from: [LoanStatus.REQUESTED, LoanStatus.APPROVED],
     to: LoanStatus.CANCELLED,
     by: LoanActor.SYSTEM,
     notify: LoanParty.BORROWER,
-    beforeStartOnly: true,
+    beforeStartOnly: false,
   },
 };
 

@@ -1,10 +1,10 @@
-import { ErrorCode, MAX_NAME_LENGTH, Role } from '@lendloop/contracts';
+import { can, ErrorCode, MAX_NAME_LENGTH, Role } from '@lendloop/contracts';
 
 import { domainError } from '../lib/errors';
 
 import type { Doc } from '../_generated/dataModel';
 import type { MutationCtx, QueryCtx } from '../_generated/server';
-import type { Viewer } from '@lendloop/contracts';
+import type { Permission, Viewer } from '@lendloop/contracts';
 import type { UserIdentity } from 'convex/server';
 
 /** The verified identity from the Clerk token; the only way a caller becomes "signed in". */
@@ -45,6 +45,13 @@ export async function requireAdminUser(ctx: QueryCtx): Promise<Doc<'users'>> {
     throw domainError(ErrorCode.FORBIDDEN, 'Only admins can do this.');
   }
   return viewer;
+}
+
+/** Role check from the shared permission matrix; record-level rules are checked on top. */
+export function assertCan(viewer: Doc<'users'>, permission: Permission): void {
+  if (!can(viewer.role, permission)) {
+    throw domainError(ErrorCode.FORBIDDEN, 'You are not allowed to do this.');
+  }
 }
 
 /** Cuts by code points so an emoji at the limit is not split into a broken surrogate. */
