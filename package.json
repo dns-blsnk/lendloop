@@ -18,7 +18,10 @@
     "prepare": "husky",
     "n8n:build": "node n8n/src/build.mjs",
     "n8n:check": "node scripts/check-n8n-exports.mjs",
-    "n8n:setup": "./scripts/n8n-setup.sh"
+    "setup:convex": "./scripts/convex-setup.sh",
+    "setup:n8n": "./scripts/n8n-setup.sh",
+    "seed": "pnpm --filter @lendloop/backend exec convex run seed/internal:run",
+    "make-admin": "node scripts/make-admin.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.4",
