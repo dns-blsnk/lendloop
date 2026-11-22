@@ -1,0 +1,52 @@
+'use client';
+
+import { useQuery } from 'convex/react';
+
+import { CategoryBadge } from '@/entities/tool';
+import { api } from '@/shared/api';
+import { useToday } from '@/shared/lib/today';
+import { Card } from '@/shared/ui/card';
+import { EmptyState } from '@/shared/ui/empty-state';
+import { Skeleton } from '@/shared/ui/skeleton';
+
+const PLACEHOLDER_COUNT = 6;
+
+/** Tools free to borrow today: name and category only, no owner details. */
+export function PublicToolList() {
+  const today = useToday();
+  const tools = useQuery(api.tools.queries.listPublic, today === null ? 'skip' : { today });
+
+  if (tools === undefined) {
+    return (
+      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-busy>
+        {Array.from({ length: PLACEHOLDER_COUNT }, (_, index) => (
+          <li key={index}>
+            <Card>
+              <Skeleton className="h-5 w-2/3" />
+              <Skeleton className="h-5 w-20" />
+            </Card>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  if (tools.length === 0) {
+    return <EmptyState>Nothing to borrow right now. Be the first to list a tool.</EmptyState>;
+  }
+
+  return (
+    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {tools.map((tool) => (
+        <li key={tool.id}>
+          <Card>
+            <h3 className="font-medium">{tool.name}</h3>
+            <div>
+              <CategoryBadge category={tool.category} />
+            </div>
+          </Card>
+        </li>
+      ))}
+    </ul>
+  );
+}

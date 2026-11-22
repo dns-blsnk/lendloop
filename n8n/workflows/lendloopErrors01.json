@@ -1,0 +1,48 @@
+{
+  "id": "lendloopErrors01",
+  "name": "LendLoop – Error handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "A LendLoop workflow failed",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calls a signed Convex endpoint: HMAC-SHA256 over \"timestamp.body\" with the n8n-to-Convex\n// secret, exactly as packages/contracts/src/integration/signature.ts verifies it. Every attempt is\n// signed afresh (a retry must not resend a stale timestamp), and only failures that can heal are\n// retried: network errors, 5xx, 408 and 429. Anything else fails the run at once, which hands it to\n// the error workflow.\nconst crypto = require('crypto');\n\nconst CONVEX_MAX_TRIES = 3;\nconst CONVEX_RETRY_WAIT_MS = 2000;\nconst CONVEX_TIMEOUT_MS = 10000;\nconst RETRYABLE_STATUSES = [408, 429];\n\nfunction signForConvex(body) {\n  const timestamp = String(Math.floor(Date.now() / 1000));\n  const signature = crypto\n    .createHmac('sha256', $env.LENDLOOP_N8N_TO_CONVEX_SECRET)\n    .update(`${timestamp}.${body}`)\n    .digest('hex');\n  return { timestamp, signature };\n}\n\nasync function postToConvex(helpers, path, payload) {\n  const body = JSON.stringify(payload);\n  let lastProblem = '';\n  for (let attempt = 1; attempt <= CONVEX_MAX_TRIES; attempt += 1) {\n    const { timestamp, signature } = signForConvex(body);\n    let status = 0;\n    let text = '';\n    try {\n      const response = await helpers.httpRequest({\n        method: 'POST',\n        url: `${$env.LENDLOOP_CONVEX_SITE_URL}${path}`,\n        headers: {\n          'content-type': 'application/json',\n          'x-lendloop-timestamp': timestamp,\n          'x-lendloop-signature': signature,\n        },\n        body,\n        json: false,\n        timeout: CONVEX_TIMEOUT_MS,\n        returnFullResponse: true,\n        ignoreHttpStatusErrors: true,\n      });\n      status = response.statusCode;\n      text = typeof response.body === 'string' ? response.body : JSON.stringify(response.body);\n    } catch (error) {\n      lastProblem = `network error (${error.name})`;\n    }\n    if (status >= 200 && status < 300) {\n      return text === '' ? null : JSON.parse(text);\n    }\n    if (status !== 0) {\n      lastProblem = `HTTP ${status}`;\n      const canHeal = status >= 500 || RETRYABLE_STATUSES.includes(status);\n      if (!canHeal) {\n        break;\n      }\n    }\n    if (attempt < CONVEX_MAX_TRIES) {\n      await new Promise((resolve) => setTimeout(resolve, CONVEX_RETRY_WAIT_MS * attempt));\n    }\n  }\n  throw new Error(`Convex ${path} failed: ${lastProblem}`);\n}\n\n// Where a LendLoop workflow failed, never what it was processing: no payload leaves n8n, and\n// email addresses that may appear in error texts (e.g. SMTP rejections) are masked.\nconst MAX_NAME = 120;\nconst MAX_MESSAGE = 300;\nconst EMAIL = /[^\\s<>\"']+@[^\\s<>\"']+/g;\nconst { execution, workflow } = $input.first().json;\nconst clip = (text, max) =>\n  String(text ?? '')\n    .replace(EMAIL, '[email]')\n    .slice(0, max);\nconst node = clip(execution?.lastNodeExecuted ?? execution?.error?.node?.name, MAX_NAME);\n\nawait postToConvex(this.helpers, '/n8n/workflow-errors', {\n  executionId: clip(execution?.id ?? `manual-${Date.now()}`, MAX_NAME),\n  workflow: clip(workflow?.name ?? 'unknown', MAX_NAME),\n  ...(node === '' ? {} : { node }),\n  message: clip(execution?.error?.message ?? 'Unknown error', MAX_MESSAGE),\n});\nreturn [];\n"
+      },
+      "name": "Report to Convex",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "A LendLoop workflow failed": {
+      "main": [
+        [
+          {
+            "node": "Report to Convex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "UTC"
+  },
+  "active": true,
+  "pinData": {},
+  "tags": []
+}

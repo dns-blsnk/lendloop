@@ -1,0 +1,280 @@
+{
+  "id": "lendloopNotify01",
+  "name": "LendLoop – Loan notification",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lendloop-loan-event",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "name": "Loan event from Convex",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "6f1f0b8e-2d55-4c41-9a37-6c1a1f0e7b01"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Accepts only events Convex signed with the Convex-to-n8n secret within the last five minutes.\n// The check runs on the raw body exactly as received, before anything is parsed.\nconst crypto = require('crypto');\n\nconst TOLERANCE_SECONDS = 300;\nconst item = $input.first();\nconst headers = item.json.headers ?? {};\nconst raw = item.binary?.data\n  ? (await this.helpers.getBinaryDataBuffer(0, 'data')).toString('utf8')\n  : '';\nconst timestamp = String(headers['x-lendloop-timestamp'] ?? '');\nconst given = Buffer.from(String(headers['x-lendloop-signature'] ?? '').toLowerCase(), 'utf8');\nconst isFresh =\n  /^\\d+$/.test(timestamp) &&\n  Math.abs(Math.floor(Date.now() / 1000) - Number(timestamp)) <= TOLERANCE_SECONDS;\nconst expected = Buffer.from(\n  crypto\n    .createHmac('sha256', $env.LENDLOOP_CONVEX_TO_N8N_SECRET)\n    .update(`${timestamp}.${raw}`)\n    .digest('hex'),\n  'utf8',\n);\n// Byte lengths, not string lengths: timingSafeEqual throws on buffers of different sizes.\nconst valid =\n  isFresh && given.length === expected.length && crypto.timingSafeEqual(given, expected);\n\nreturn [{ json: valid ? { valid, event: JSON.parse(raw) } : { valid } }];\n"
+      },
+      "name": "Verify signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "signature-valid",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Signed by Convex?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"error\":\"unauthorized\"}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "name": "Reject (401)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Plain-text email for one loan event. Uses only the fields Convex sent: first name, email,\n// tool name, dates and status.\nconst event = $input.first().json.event;\nconst { toolName, startDate, endDate } = event.loan;\nconst dates = startDate === endDate ? startDate : `${startDate} to ${endDate}`;\n\nconst lines = {\n  'loan.requested': [\n    `Someone would like to borrow your ${toolName}`,\n    `A neighbour asked to borrow your ${toolName} for ${dates}. Open LendLoop to approve or decline.`,\n  ],\n  'loan.approved': [\n    `Your request for the ${toolName} was approved`,\n    `Good news: the owner approved your request for ${dates}. Arrange the pick-up with them.`,\n  ],\n  'loan.declined': [\n    `Your request for the ${toolName} was declined`,\n    `The owner declined your request for ${dates}. Other neighbours may have one to lend.`,\n  ],\n  'loan.autoDeclined': [\n    `Your request for the ${toolName} could not be accepted`,\n    `The ${toolName} is not available for ${dates}, so your request was closed.`,\n  ],\n  'loan.cancelled': [\n    `A loan of your ${toolName} was cancelled`,\n    `The borrower cancelled the loan for ${dates}. The tool is free again for those days.`,\n  ],\n  'loan.withdrawn': [\n    `Your loan of the ${toolName} was cancelled`,\n    `The ${toolName} is no longer listed, so the loan for ${dates} was cancelled.`,\n  ],\n  'loan.returned': [\n    `Thanks for returning the ${toolName}`,\n    `The owner marked the ${toolName} as returned. Thank you for borrowing responsibly.`,\n  ],\n};\n\nconst [subject, body] = lines[event.type] ?? [\n  'LendLoop update',\n  'There is news about one of your loans.',\n];\n\nreturn [\n  {\n    json: {\n      eventId: event.eventId,\n      to: event.recipient.email,\n      subject,\n      text: `Hi ${event.recipient.firstName},\\n\\n${body}\\n\\n— LendLoop`,\n    },\n  },\n];\n"
+      },
+      "name": "Compose email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "LendLoop <noreply@lendloop.local>",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Send email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        880,
+        200
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "lendloopMailpit1",
+          "name": "Mailpit (local SMTP)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "name": "Sent (200)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "noData",
+        "options": {
+          "responseCode": 503
+        }
+      },
+      "name": "Not sent (503)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calls a signed Convex endpoint: HMAC-SHA256 over \"timestamp.body\" with the n8n-to-Convex\n// secret, exactly as packages/contracts/src/integration/signature.ts verifies it. Every attempt is\n// signed afresh (a retry must not resend a stale timestamp), and only failures that can heal are\n// retried: network errors, 5xx, 408 and 429. Anything else fails the run at once, which hands it to\n// the error workflow.\nconst crypto = require('crypto');\n\nconst CONVEX_MAX_TRIES = 3;\nconst CONVEX_RETRY_WAIT_MS = 2000;\nconst CONVEX_TIMEOUT_MS = 10000;\nconst RETRYABLE_STATUSES = [408, 429];\n\nfunction signForConvex(body) {\n  const timestamp = String(Math.floor(Date.now() / 1000));\n  const signature = crypto\n    .createHmac('sha256', $env.LENDLOOP_N8N_TO_CONVEX_SECRET)\n    .update(`${timestamp}.${body}`)\n    .digest('hex');\n  return { timestamp, signature };\n}\n\nasync function postToConvex(helpers, path, payload) {\n  const body = JSON.stringify(payload);\n  let lastProblem = '';\n  for (let attempt = 1; attempt <= CONVEX_MAX_TRIES; attempt += 1) {\n    const { timestamp, signature } = signForConvex(body);\n    let status = 0;\n    let text = '';\n    try {\n      const response = await helpers.httpRequest({\n        method: 'POST',\n        url: `${$env.LENDLOOP_CONVEX_SITE_URL}${path}`,\n        headers: {\n          'content-type': 'application/json',\n          'x-lendloop-timestamp': timestamp,\n          'x-lendloop-signature': signature,\n        },\n        body,\n        json: false,\n        timeout: CONVEX_TIMEOUT_MS,\n        returnFullResponse: true,\n        ignoreHttpStatusErrors: true,\n      });\n      status = response.statusCode;\n      text = typeof response.body === 'string' ? response.body : JSON.stringify(response.body);\n    } catch (error) {\n      lastProblem = `network error (${error.name})`;\n    }\n    if (status >= 200 && status < 300) {\n      return text === '' ? null : JSON.parse(text);\n    }\n    if (status !== 0) {\n      lastProblem = `HTTP ${status}`;\n      const canHeal = status >= 500 || RETRYABLE_STATUSES.includes(status);\n      if (!canHeal) {\n        break;\n      }\n    }\n    if (attempt < CONVEX_MAX_TRIES) {\n      await new Promise((resolve) => setTimeout(resolve, CONVEX_RETRY_WAIT_MS * attempt));\n    }\n  }\n  throw new Error(`Convex ${path} failed: ${lastProblem}`);\n}\n\n// Generated by n8n/src/build.mjs. Reports \"sent\" without any error text (it can hold addresses).\nfor (const [index] of $input.all().entries()) {\n  const source = $('Compose email').itemMatching(index).json;\n  await postToConvex(this.helpers, '/n8n/notification-acks', {\n    eventId: source.eventId,\n    status: 'sent',\n  });\n}\nreturn $input.all();\n"
+      },
+      "name": "Report \"sent\"",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calls a signed Convex endpoint: HMAC-SHA256 over \"timestamp.body\" with the n8n-to-Convex\n// secret, exactly as packages/contracts/src/integration/signature.ts verifies it. Every attempt is\n// signed afresh (a retry must not resend a stale timestamp), and only failures that can heal are\n// retried: network errors, 5xx, 408 and 429. Anything else fails the run at once, which hands it to\n// the error workflow.\nconst crypto = require('crypto');\n\nconst CONVEX_MAX_TRIES = 3;\nconst CONVEX_RETRY_WAIT_MS = 2000;\nconst CONVEX_TIMEOUT_MS = 10000;\nconst RETRYABLE_STATUSES = [408, 429];\n\nfunction signForConvex(body) {\n  const timestamp = String(Math.floor(Date.now() / 1000));\n  const signature = crypto\n    .createHmac('sha256', $env.LENDLOOP_N8N_TO_CONVEX_SECRET)\n    .update(`${timestamp}.${body}`)\n    .digest('hex');\n  return { timestamp, signature };\n}\n\nasync function postToConvex(helpers, path, payload) {\n  const body = JSON.stringify(payload);\n  let lastProblem = '';\n  for (let attempt = 1; attempt <= CONVEX_MAX_TRIES; attempt += 1) {\n    const { timestamp, signature } = signForConvex(body);\n    let status = 0;\n    let text = '';\n    try {\n      const response = await helpers.httpRequest({\n        method: 'POST',\n        url: `${$env.LENDLOOP_CONVEX_SITE_URL}${path}`,\n        headers: {\n          'content-type': 'application/json',\n          'x-lendloop-timestamp': timestamp,\n          'x-lendloop-signature': signature,\n        },\n        body,\n        json: false,\n        timeout: CONVEX_TIMEOUT_MS,\n        returnFullResponse: true,\n        ignoreHttpStatusErrors: true,\n      });\n      status = response.statusCode;\n      text = typeof response.body === 'string' ? response.body : JSON.stringify(response.body);\n    } catch (error) {\n      lastProblem = `network error (${error.name})`;\n    }\n    if (status >= 200 && status < 300) {\n      return text === '' ? null : JSON.parse(text);\n    }\n    if (status !== 0) {\n      lastProblem = `HTTP ${status}`;\n      const canHeal = status >= 500 || RETRYABLE_STATUSES.includes(status);\n      if (!canHeal) {\n        break;\n      }\n    }\n    if (attempt < CONVEX_MAX_TRIES) {\n      await new Promise((resolve) => setTimeout(resolve, CONVEX_RETRY_WAIT_MS * attempt));\n    }\n  }\n  throw new Error(`Convex ${path} failed: ${lastProblem}`);\n}\n\n// Generated by n8n/src/build.mjs. Reports \"failed\" without any error text (it can hold addresses).\nfor (const [index] of $input.all().entries()) {\n  const source = $('Compose email').itemMatching(index).json;\n  await postToConvex(this.helpers, '/n8n/notification-acks', {\n    eventId: source.eventId,\n    status: 'failed',\n    error: 'The email could not be sent.',\n  });\n}\nreturn $input.all();\n"
+      },
+      "name": "Report \"failed\"",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Loan event from Convex": {
+      "main": [
+        [
+          {
+            "node": "Verify signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify signature": {
+      "main": [
+        [
+          {
+            "node": "Signed by Convex?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signed by Convex?": {
+      "main": [
+        [
+          {
+            "node": "Compose email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject (401)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose email": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email": {
+      "main": [
+        [
+          {
+            "node": "Sent (200)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not sent (503)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sent (200)": {
+      "main": [
+        [
+          {
+            "node": "Report \"sent\"",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Not sent (503)": {
+      "main": [
+        [
+          {
+            "node": "Report \"failed\"",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "lendloopErrors01",
+    "timezone": "UTC"
+  },
+  "active": true,
+  "pinData": {},
+  "tags": []
+}

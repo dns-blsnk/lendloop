@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+# A newer push makes an older run of the same branch or PR pointless; main and dev keep every run.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (ESLint + Steiger)
+        run: pnpm lint
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: n8n exports are current and free of secrets
+        run: pnpm n8n:check
+
+      # Public values only (the publishable key and Convex URL end up in the browser bundle anyway),
+      # taken from repository variables. Until those are set, well-formed placeholders let CI prove
+      # the app compiles and prerenders; the resulting bundle is never deployed.
+      - name: Build
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_CONVEX_URL: ${{ vars.NEXT_PUBLIC_CONVEX_URL || 'http://127.0.0.1:3210' }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsuZXhhbXBsZS5jb20k' }} # gitleaks:allow
+
+  # Separate job: a fresh upstream advisory shows up as its own red check instead of hiding the
+  # result of lint, typecheck, tests and build.
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      # No install here, so there is no pnpm store to cache.
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

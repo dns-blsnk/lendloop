@@ -30,3 +30,9 @@ npm-debug.log*
 .ua/
 .mcp.json
 coverage/
+
+# turbo
+.turbo/
+
+# browser tooling
+.playwright-mcp/
