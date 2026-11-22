@@ -1,13 +1,12 @@
 'use client';
 
-import { api } from '@lendloop/backend/api';
 import { useQuery } from 'convex/react';
 
+import { CategoryBadge } from '@/entities/tool';
+import { api } from '@/shared/api';
 import { useToday } from '@/shared/lib/today';
 import { Card } from '@/shared/ui/card';
 import { Skeleton } from '@/shared/ui/skeleton';
-
-import { CategoryBadge } from './category-badge';
 
 const PLACEHOLDER_COUNT = 6;
 

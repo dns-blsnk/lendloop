@@ -2,6 +2,7 @@
 
 import { SignInButton, useAuth, UserButton } from '@clerk/nextjs';
 
+import { Button } from '@/shared/ui/button';
 import { Skeleton } from '@/shared/ui/skeleton';
 
 /** Follows the Clerk session, so a signed-in user can always reach the account menu to sign out. */
@@ -15,12 +16,7 @@ export function SignInCta() {
   }
   return (
     <SignInButton mode="modal">
-      <button
-        type="button"
-        className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-foreground hover:opacity-90"
-      >
-        Sign in to lend or borrow
-      </button>
+      <Button className="rounded-full">Sign in to lend or borrow</Button>
     </SignInButton>
   );
 }

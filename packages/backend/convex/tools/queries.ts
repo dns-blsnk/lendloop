@@ -36,9 +36,10 @@ export const mine = userQuery({
   handler: async (ctx, { today }) => listOwnToolCards(ctx, ctx.viewer, displayDay(today)),
 });
 
+/** One tool, or null when it is no longer listed. */
 export const get = userQuery({
   args: { today: isoDateSchema, toolId: zid('tools') },
-  returns: toolCardWithId,
+  returns: toolCardWithId.nullable(),
   handler: async (ctx, { today, toolId }) =>
     getToolCard(ctx, ctx.viewer, toolId, displayDay(today)),
 });

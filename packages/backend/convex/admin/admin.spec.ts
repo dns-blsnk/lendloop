@@ -81,9 +81,7 @@ describe('admin.mutations', () => {
       endDate: '2099-01-02',
     });
     await asAdmin.mutation(api.admin.mutations.removeTool, { toolId });
-    await expect(asOwner.query(api.tools.queries.get, { today, toolId })).rejects.toMatchObject({
-      data: { code: ErrorCode.NOT_FOUND },
-    });
+    expect(await asOwner.query(api.tools.queries.get, { today, toolId })).toBeNull();
     expect((await t.run((ctx) => ctx.db.get('loans', loanId)))?.status).toBe(LoanStatus.CANCELLED);
     const adminId = await userIdByEmail(t, admin.email);
     const removal = await t.run((ctx) =>
@@ -118,7 +116,7 @@ describe('admin.mutations', () => {
       isTrustedLender: true,
     });
     const card = await asOwner.query(api.tools.queries.get, { today, toolId });
-    expect(card.lender.isTrustedLender).toBe(true);
+    expect(card?.lender.isTrustedLender).toBe(true);
     const { items: users } = await asAdmin.query(api.admin.queries.users, {});
     expect(users.find((user) => user.id === ownerId)).toMatchObject({
       isTrustedLender: true,

@@ -1,6 +1,7 @@
 import { APP_NAME, APP_TAGLINE } from '@lendloop/contracts';
 
-import { Header } from './header';
+import { Header } from '@/widgets/header';
+
 import { PublicToolList } from './public-tool-list';
 
 export function HomePage() {

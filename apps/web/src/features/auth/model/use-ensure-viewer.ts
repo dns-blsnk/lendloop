@@ -1,17 +1,8 @@
-import { api } from '@lendloop/backend/api';
-import { isAppErrorData } from '@lendloop/contracts';
 import { useConvexAuth, useMutation } from 'convex/react';
-import { ConvexError } from 'convex/values';
 import { useCallback, useEffect, useState } from 'react';
 
-const FALLBACK_MESSAGE = 'We could not set up your account. Please try again.';
-
-function messageOf(error: unknown): string {
-  if (error instanceof ConvexError && isAppErrorData(error.data)) {
-    return error.data.message;
-  }
-  return FALLBACK_MESSAGE;
-}
+import { api } from '@/shared/api';
+import { errorMessage } from '@/shared/lib/errors';
 
 /**
  * Creates or refreshes the Convex account right after Clerk signs the user in. The backend takes
@@ -28,7 +19,7 @@ export function useEnsureViewer(): { error: string | null; retry: () => void } {
         setError(null);
       },
       (reason: unknown) => {
-        setError(messageOf(reason));
+        setError(errorMessage(reason));
       },
     );
   }, [ensure]);

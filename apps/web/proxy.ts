@@ -1,7 +1,7 @@
 import { clerkMiddleware } from '@clerk/nextjs/server';
 
-// Attaches the Clerk session to every request. Pages decide what to show; the Convex backend
-// enforces access on its own, so nothing here is a security boundary.
+// Attaches the Clerk session to every request. Access is decided per resource: Convex functions
+// check the caller, and signed-in pages render a sign-in prompt for guests.
 export default clerkMiddleware();
 
 export const config = {

@@ -70,7 +70,7 @@ describe('tools.update and tools.remove', () => {
   it('lets the owner edit their listing', async () => {
     const { asOwner, toolId } = await world();
     await asOwner.mutation(api.tools.mutations.update, { toolId, ...drill, name: 'Hammer drill' });
-    expect((await asOwner.query(api.tools.queries.get, { today, toolId })).name).toBe(
+    expect((await asOwner.query(api.tools.queries.get, { today, toolId }))?.name).toBe(
       'Hammer drill',
     );
   });
@@ -97,9 +97,7 @@ describe('tools.update and tools.remove', () => {
       endDate: '2099-01-02',
     });
     await asOwner.mutation(api.tools.mutations.remove, { toolId });
-    await expect(asOwner.query(api.tools.queries.get, { today, toolId })).rejects.toMatchObject({
-      data: { code: ErrorCode.NOT_FOUND },
-    });
+    expect(await asOwner.query(api.tools.queries.get, { today, toolId })).toBeNull();
     const loan = await t.run((ctx) => ctx.db.get('loans', loanId));
     expect(loan?.status).toBe(LoanStatus.CANCELLED);
   });
@@ -142,7 +140,7 @@ describe('tools.update and tools.remove', () => {
       data: { code: ErrorCode.CONFLICT },
     });
     const card = await asOwner.query(api.tools.queries.get, { today, toolId });
-    expect(card.availability).toBe(Availability.OVERDUE);
+    expect(card?.availability).toBe(Availability.OVERDUE);
   });
 
   it('refuses to delete a tool that is out on loan', async () => {

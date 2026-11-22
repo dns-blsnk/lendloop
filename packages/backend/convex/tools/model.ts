@@ -138,17 +138,19 @@ export async function listOwnToolCards(
   return toToolCards(ctx, tools, viewer, today);
 }
 
+/** A tool's card, or null once it is removed: pages watching it show "no longer listed". */
 export async function getToolCard(
   ctx: QueryCtx,
   viewer: Doc<'users'>,
   toolId: Id<'tools'>,
   today: IsoDate,
-): Promise<ToolCardWithId> {
-  const [card] = await toToolCards(ctx, [await getActiveTool(ctx, toolId)], viewer, today);
-  if (card === undefined) {
-    throw domainError(ErrorCode.NOT_FOUND, 'This tool is no longer listed.');
+): Promise<ToolCardWithId | null> {
+  const tool = await ctx.db.get('tools', toolId);
+  if (tool?.status !== ToolStatus.ACTIVE) {
+    return null;
   }
-  return card;
+  const [card] = await toToolCards(ctx, [tool], viewer, today);
+  return card ?? null;
 }
 
 export async function createTool(
