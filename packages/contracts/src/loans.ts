@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 import { daysBetween, isoDateSchema } from './dates';
+import { loanEventTypeSchema } from './integration/event-types';
+import { activityKindSchema, deliveryStatusSchema } from './integration/http';
 
 import type { IsoDate } from './dates';
 
@@ -216,6 +218,19 @@ export const MAX_OPEN_REQUESTS_PER_BORROWER = 10;
 /** Finished loans (declined, cancelled, returned) one list shows; open ones are always shown. */
 export const MAX_FINISHED_LOANS_PER_LIST = 50;
 
+/** Most automation entries shown on one loan. */
+export const MAX_ACTIVITY_PER_LOAN = 5;
+
+export const loanActivitySchema = z.object({
+  id: z.string(),
+  kind: activityKindSchema,
+  eventType: loanEventTypeSchema.optional(),
+  status: deliveryStatusSchema,
+  at: z.number(),
+});
+
+export type LoanActivity = z.infer<typeof loanActivitySchema>;
+
 /**
  * A loan as one of its parties sees it. `counterpart` is the other person: the borrower for the
  * owner, the owner for the borrower. Names only, never emails. The backend adds the ids.
@@ -230,6 +245,8 @@ export const loanViewSchema = z.object({
   isToolListed: z.boolean(),
   counterpart: z.object({ name: z.string(), isTrustedLender: z.boolean() }),
   actions: z.array(partyLoanActionSchema),
+  /** What the automation did for this loan, newest first ("Reminder sent 2 days ago"). */
+  activity: z.array(loanActivitySchema),
 });
 
 export type LoanView = z.infer<typeof loanViewSchema>;

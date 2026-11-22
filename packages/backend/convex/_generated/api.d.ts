@@ -16,6 +16,7 @@ import type * as audit_model from "../audit/model.js";
 import type * as audit_tables from "../audit/tables.js";
 import type * as automation_delivery from "../automation/delivery.js";
 import type * as automation_events from "../automation/events.js";
+import type * as automation_health from "../automation/health.js";
 import type * as automation_index from "../automation/index.js";
 import type * as automation_n8n from "../automation/n8n.js";
 import type * as automation_outbox from "../automation/outbox.js";
@@ -64,6 +65,7 @@ declare const fullApi: ApiFromModules<{
   "audit/tables": typeof audit_tables;
   "automation/delivery": typeof automation_delivery;
   "automation/events": typeof automation_events;
+  "automation/health": typeof automation_health;
   "automation/index": typeof automation_index;
   "automation/n8n": typeof automation_n8n;
   "automation/outbox": typeof automation_outbox;

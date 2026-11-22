@@ -2,6 +2,7 @@ import {
   FORMER_NEIGHBOUR_NAME,
   isPartyLoanAction,
   LoanStatus,
+  MAX_ACTIVITY_PER_LOAN,
   MAX_FINISHED_LOANS_PER_LIST,
   REMOVED_TOOL_NAME,
   ToolStatus,
@@ -9,6 +10,7 @@ import {
   LoanParty,
 } from '@lendloop/contracts';
 
+import { activityOfLoan } from '../automation';
 import { isOverdue } from '../domain/availability';
 
 import { partyOf } from './model';
@@ -34,9 +36,10 @@ async function toLoanViews(
   return Promise.all(
     own.map(async ({ loan, party }) => {
       const counterpartId = party === LoanParty.OWNER ? loan.borrowerId : loan.ownerId;
-      const [tool, counterpart] = await Promise.all([
+      const [tool, counterpart, activity] = await Promise.all([
         ctx.db.get('tools', loan.toolId),
         ctx.db.get('users', counterpartId),
+        activityOfLoan(ctx, loan._id, MAX_ACTIVITY_PER_LOAN),
       ]);
       const person = counterpart ?? FORMER_NEIGHBOUR;
       return {
@@ -50,6 +53,7 @@ async function toLoanViews(
         isToolListed: tool?.status === ToolStatus.ACTIVE,
         counterpart: { name: person.name, isTrustedLender: person.isTrustedLender },
         actions: availableActions(loan, party, today).filter(isPartyLoanAction),
+        activity,
       };
     }),
   );

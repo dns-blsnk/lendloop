@@ -31,6 +31,8 @@ export const automationTables = {
     nextAttemptAt: v.number(),
     lastError: v.optional(v.string()),
     deliveredAt: v.optional(v.number()),
+    /** When it was given up on; the admin health page sorts and shows by this. */
+    failedAt: v.optional(v.number()),
   }).index('by_status_nextAttemptAt', ['status', 'nextAttemptAt']),
 
   /**
@@ -48,7 +50,7 @@ export const automationTables = {
     reportedAt: v.number(),
   })
     .index('by_key', ['idempotencyKey'])
-    .index('by_loan', ['loanId']),
+    .index('by_loan_reportedAt', ['loanId', 'reportedAt']),
 
   /** Failures reported by the n8n error workflow: where, never the payload. */
   workflowErrors: defineTable({

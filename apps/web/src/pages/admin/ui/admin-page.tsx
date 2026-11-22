@@ -8,6 +8,7 @@ import { Page } from '@/shared/ui/page';
 import { Skeleton } from '@/shared/ui/skeleton';
 import { Header } from '@/widgets/header';
 
+import { AdminAutomation } from './admin-automation';
 import { AdminListings } from './admin-listings';
 import { AdminLoans } from './admin-loans';
 import { AdminTabs } from './admin-tabs';
@@ -22,6 +23,12 @@ const SECTIONS = [
     label: 'Listings',
     permission: Permission.TOOLS_REMOVE_ANY,
     Panel: AdminListings,
+  },
+  {
+    id: 'automation',
+    label: 'Automation',
+    permission: Permission.AUTOMATION_VIEW_HEALTH,
+    Panel: AdminAutomation,
   },
 ] as const;
 

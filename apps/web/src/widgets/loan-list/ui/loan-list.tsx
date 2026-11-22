@@ -9,6 +9,7 @@ import { Card } from '@/shared/ui/card';
 import { EmptyState } from '@/shared/ui/empty-state';
 import { Skeleton } from '@/shared/ui/skeleton';
 
+import { ActivityLine } from './activity-line';
 import { LoanActions } from './loan-actions';
 
 import type { api } from '@/shared/api';
@@ -46,6 +47,7 @@ function LoanItem({
           <span className="flex items-center gap-1 text-sm text-muted">
             {counterpartLabel}: <LenderName lender={loan.counterpart} />
           </span>
+          <ActivityLine activity={loan.activity} />
         </div>
         <LoanActions loanId={loan.id} actions={loan.actions} />
       </div>

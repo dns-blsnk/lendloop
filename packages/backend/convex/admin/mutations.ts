@@ -2,6 +2,7 @@ import { AuditAction } from '@lendloop/contracts';
 import { zid } from 'convex-helpers/server/zod4';
 import { z } from 'zod';
 
+import { retryFailedEvent } from '../automation';
 import { adminMutation } from '../functions';
 import { removeTool as removeAnyTool } from '../tools';
 
@@ -26,6 +27,16 @@ export const setTrusted = adminMutation({
   returns: z.null(),
   handler: async (ctx, change) => {
     await setTrustedLender(ctx, ctx.viewer._id, change);
+    return null;
+  },
+});
+
+/** Sends a notification that ran out of attempts again. */
+export const retryNotification = adminMutation({
+  args: { eventId: zid('outboundEvents') },
+  returns: z.null(),
+  handler: async (ctx, { eventId }) => {
+    await retryFailedEvent(ctx, eventId);
     return null;
   },
 });

@@ -1,4 +1,5 @@
 import {
+  automationHealthSchema,
   adminLoanSchema,
   adminUserSchema,
   cappedListSchema,
@@ -8,6 +9,7 @@ import {
 } from '@lendloop/contracts';
 import { zid } from 'convex-helpers/server/zod4';
 
+import { automationHealth } from '../automation';
 import { adminQuery } from '../functions';
 import { displayDay } from '../lib/today';
 import { listToolCardsForAdmin } from '../tools';
@@ -33,4 +35,11 @@ export const tools = adminQuery({
   args: { today: isoDateSchema },
   returns: cappedListSchema(toolCardSchema.extend({ id: zid('tools') })),
   handler: async (ctx, { today }) => listToolCardsForAdmin(ctx, ctx.viewer, displayDay(today)),
+});
+
+/** How the n8n integration is doing. */
+export const automation = adminQuery({
+  args: {},
+  returns: automationHealthSchema,
+  handler: async (ctx) => automationHealth(ctx),
 });

@@ -14,7 +14,7 @@ import { domainError } from '../lib/errors';
 
 import type { Id } from '../_generated/dataModel';
 import type { MutationCtx, QueryCtx } from '../_generated/server';
-import type { IsoDate, LoanEventType, OverdueLoan } from '@lendloop/contracts';
+import type { IsoDate, LoanActivity, LoanEventType, OverdueLoan } from '@lendloop/contracts';
 
 export const OVERDUE_WORKFLOW = 'overdue-reminders';
 
@@ -57,6 +57,26 @@ async function upsertActivity(ctx: MutationCtx, record: ActivityRecord): Promise
     error: record.error,
     reportedAt: Date.now(),
   });
+}
+
+/** The newest automation entries for one loan, for its activity line. */
+export async function activityOfLoan(
+  ctx: QueryCtx,
+  loanId: Id<'loans'>,
+  limit: number,
+): Promise<LoanActivity[]> {
+  const rows = await ctx.db
+    .query('automationActivity')
+    .withIndex('by_loan_reportedAt', (q) => q.eq('loanId', loanId))
+    .order('desc')
+    .take(limit);
+  return rows.map((row) => ({
+    id: row._id,
+    kind: row.kind,
+    ...(row.eventType === undefined ? {} : { eventType: row.eventType }),
+    status: row.status,
+    at: row.reportedAt,
+  }));
 }
 
 export async function recordHeartbeat(ctx: MutationCtx, name: string): Promise<void> {

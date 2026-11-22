@@ -3,20 +3,7 @@ import { z } from 'zod';
 import { isoDateSchema } from '../dates';
 import { loanStatusSchema } from '../loans';
 
-/** What happened to a loan, from the point of view of the person being told. */
-export const LoanEventType = {
-  REQUESTED: 'loan.requested',
-  APPROVED: 'loan.approved',
-  DECLINED: 'loan.declined',
-  AUTO_DECLINED: 'loan.autoDeclined',
-  CANCELLED: 'loan.cancelled',
-  WITHDRAWN: 'loan.withdrawn',
-  RETURNED: 'loan.returned',
-} as const;
-
-export type LoanEventType = (typeof LoanEventType)[keyof typeof LoanEventType];
-
-export const loanEventTypeSchema = z.enum(LoanEventType);
+import { loanEventTypeSchema } from './event-types';
 
 /**
  * The webhook body Convex sends to n8n. Only what an email needs: the recipient's first name and

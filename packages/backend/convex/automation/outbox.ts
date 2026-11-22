@@ -17,6 +17,7 @@ import {
   buildPayload,
   MAX_ATTEMPTS,
   NOT_CONFIGURED_RECHECK_MS,
+  RECIPIENT_GONE,
   recordFailedAttempt,
 } from './delivery';
 
@@ -53,7 +54,8 @@ export const claim = internalMutation({
     if (payload === null || event.attempts >= MAX_ATTEMPTS) {
       await ctx.db.patch('outboundEvents', eventId, {
         status: 'failed',
-        lastError: payload === null ? 'The recipient no longer exists.' : 'No attempts left.',
+        lastError: payload === null ? RECIPIENT_GONE : 'No attempts left.',
+        failedAt: now,
       });
       return null;
     }

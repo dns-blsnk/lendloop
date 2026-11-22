@@ -18,6 +18,9 @@ export const RETRY_DELAYS_MS = [
 ] as const;
 export const MAX_ATTEMPTS = RETRY_DELAYS_MS.length + 1;
 
+/** Why an event can never be delivered, so "send again" is refused for it. */
+export const RECIPIENT_GONE = 'The recipient no longer exists.';
+
 /** While n8n is not configured, events wait this long between checks without using attempts. */
 export const NOT_CONFIGURED_RECHECK_MS = TEN_MINUTES_MS;
 
@@ -54,7 +57,11 @@ export async function recordFailedAttempt(
   }
   const delay = failure.isPermanent ? undefined : RETRY_DELAYS_MS[event.attempts - 1];
   if (delay === undefined) {
-    await ctx.db.patch('outboundEvents', eventId, { status: 'failed', lastError: failure.error });
+    await ctx.db.patch('outboundEvents', eventId, {
+      status: 'failed',
+      lastError: failure.error,
+      failedAt: Date.now(),
+    });
     return null;
   }
   await ctx.db.patch('outboundEvents', eventId, {

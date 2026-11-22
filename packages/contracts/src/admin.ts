@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { isoDateSchema } from './dates';
+import { loanEventTypeSchema } from './integration/event-types';
 import { loanStatusSchema } from './loans';
 import { roleSchema } from './roles';
 
@@ -46,4 +47,45 @@ export type AdminUser = z.infer<typeof adminUserSchema>;
 /** A capped admin list says when it was cut, so the UI can ask for a narrower filter. */
 export function cappedListSchema<Item extends z.ZodType>(item: Item) {
   return z.object({ items: z.array(item), isTruncated: z.boolean() });
+}
+
+/**
+ * The overdue workflow runs daily; no check-in for longer than this (25 hours: a daily run plus an
+ * hour of slack) means it has stopped.
+ */
+export const HEARTBEAT_STALE_AFTER_MS = 90_000_000;
+
+/** Most failed events and workflow errors the health page lists. */
+export const MAX_HEALTH_ITEMS = 20;
+
+/** Admin view of the n8n integration: is it running, and what failed. */
+export const automationHealthSchema = z.object({
+  /** When the overdue workflow last checked in; the UI compares it with HEARTBEAT_STALE_AFTER_MS. */
+  overdueWorkflow: z.object({ lastRunAt: z.number().nullable() }),
+  /** Pending events, counted up to a cap; `isCapped` means "at least". */
+  pendingEvents: z.object({ count: z.number(), isCapped: z.boolean() }),
+  failedEvents: z.array(
+    z.object({
+      id: z.string(),
+      type: loanEventTypeSchema,
+      attempts: z.number(),
+      lastError: z.string(),
+      at: z.number(),
+    }),
+  ),
+  workflowErrors: z.array(
+    z.object({
+      executionId: z.string(),
+      workflow: z.string(),
+      node: z.string().optional(),
+      message: z.string(),
+      at: z.number(),
+    }),
+  ),
+});
+
+export type AutomationHealth = z.infer<typeof automationHealthSchema>;
+
+export function isHeartbeatStale(lastRunAt: number | null, now: number): boolean {
+  return lastRunAt === null || now - lastRunAt > HEARTBEAT_STALE_AFTER_MS;
 }
