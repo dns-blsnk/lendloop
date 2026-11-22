@@ -16,6 +16,11 @@ export function todayUtc(now: number = Date.now()): IsoDate {
   return new Date(now).toISOString().slice(0, ISO_DATE_LENGTH);
 }
 
+/** Milliseconds from `now` until the next UTC midnight, when "today" changes. */
+export function msUntilNextUtcDay(now: number): number {
+  return MS_PER_DAY - (now % MS_PER_DAY);
+}
+
 /** Whole days from `from` to `to`; 0 for the same day, negative when `to` is earlier. */
 export function daysBetween(from: IsoDate, to: IsoDate): number {
   return Math.round((Date.parse(to) - Date.parse(from)) / MS_PER_DAY);

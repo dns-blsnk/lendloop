@@ -33,3 +33,6 @@ coverage/
 
 # turbo
 .turbo/
+
+# browser tooling
+.playwright-mcp/

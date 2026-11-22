@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { daysBetween, isoDateSchema, rangesOverlap, todayUtc } from './dates';
+import { daysBetween, isoDateSchema, msUntilNextUtcDay, rangesOverlap, todayUtc } from './dates';
 
 describe('dates', () => {
   it('formats today in UTC', () => {
@@ -22,5 +22,10 @@ describe('dates', () => {
     const a = { startDate: '2026-12-01', endDate: '2026-12-05' };
     expect(rangesOverlap(a, { startDate: '2026-12-05', endDate: '2026-12-07' })).toBe(true);
     expect(rangesOverlap(a, { startDate: '2026-12-06', endDate: '2026-12-07' })).toBe(false);
+  });
+
+  it('counts down to the next UTC midnight', () => {
+    expect(msUntilNextUtcDay(Date.UTC(2026, 10, 22, 23, 59, 0))).toBe(60_000);
+    expect(msUntilNextUtcDay(Date.UTC(2026, 10, 22, 0, 0, 0))).toBe(86_400_000);
   });
 });

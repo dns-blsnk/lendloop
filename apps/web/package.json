@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "next typegen && tsc --noEmit",
-    "lint:fsd": "steiger ./src"
+    "lint:fsd": "steiger ./src",
+    "test": "vitest run"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.10.7",
@@ -25,8 +26,10 @@
     "@tailwindcss/turbopack": "4.3.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "jsdom": "^31.0.1",
     "steiger": "0.10.0",
     "tailwindcss": "4.3.3",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vitest": "^5.1.1"
   }
 }
