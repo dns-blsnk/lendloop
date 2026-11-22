@@ -26,17 +26,25 @@ describe('availableActions', () => {
     ]);
   });
 
-  it('stops offering approval once the requested start date has come', () => {
+  it('still offers approval on the first day and stops after it', () => {
     expect(availableActions(started(LoanStatus.REQUESTED), LoanParty.OWNER, TODAY)).toEqual([
+      LoanAction.APPROVE,
       LoanAction.DECLINE,
     ]);
+    const stale = { status: LoanStatus.REQUESTED, startDate: '2026-11-30' };
+    expect(availableActions(stale, LoanParty.OWNER, TODAY)).toEqual([LoanAction.DECLINE]);
   });
 
-  it('lets the borrower cancel an approved loan only before it starts', () => {
-    expect(availableActions(future(LoanStatus.APPROVED), LoanParty.BORROWER, TODAY)).toEqual([
+  it('offers return only once the loan has started', () => {
+    expect(availableActions(future(LoanStatus.APPROVED), LoanParty.OWNER, TODAY)).toEqual([]);
+  });
+
+  it('lets the borrower cancel an approved loan up to its first day', () => {
+    expect(availableActions(started(LoanStatus.APPROVED), LoanParty.BORROWER, TODAY)).toEqual([
       LoanAction.CANCEL,
     ]);
-    expect(availableActions(started(LoanStatus.APPROVED), LoanParty.BORROWER, TODAY)).toEqual([]);
+    const underWay = { status: LoanStatus.APPROVED, startDate: '2026-11-30' };
+    expect(availableActions(underWay, LoanParty.BORROWER, TODAY)).toEqual([]);
   });
 
   it('lets only the owner mark an approved loan as returned', () => {

@@ -18,5 +18,6 @@ export const loansTables = {
     .index('by_tool_status', ['toolId', 'status'])
     .index('by_owner_status', ['ownerId', 'status'])
     .index('by_borrower_status', ['borrowerId', 'status'])
+    .index('by_status_startDate', ['status', 'startDate'])
     .index('by_status_endDate', ['status', 'endDate']),
 };

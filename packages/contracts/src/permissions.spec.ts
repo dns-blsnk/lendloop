@@ -13,6 +13,7 @@ describe('permissions', () => {
   it('lets users create tools and request loans', () => {
     expect(can(Role.USER, Permission.TOOLS_CREATE)).toBe(true);
     expect(can(Role.USER, Permission.LOANS_REQUEST)).toBe(true);
+    expect(can(Role.USER, Permission.LOANS_ACT)).toBe(true);
   });
 
   it('keeps admin-only actions away from users', () => {
