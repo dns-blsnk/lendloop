@@ -1,0 +1,2 @@
+# Placeholder Clerk publishable key used only by the CI build (not a credential).
+5715dccf1f66ac3a98489b5e4891aafac9f6fffb:.github/workflows/ci.yml:generic-api-key:56
