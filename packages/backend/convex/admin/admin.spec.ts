@@ -30,6 +30,9 @@ describe('admin access', () => {
       forbidden,
     );
     await expect(asOwner.query(api.admin.queries.users, {})).rejects.toMatchObject(forbidden);
+    await expect(asOwner.query(api.admin.queries.tools, { today })).rejects.toMatchObject(
+      forbidden,
+    );
     await expect(
       asOwner.mutation(api.admin.mutations.removeTool, { toolId }),
     ).rejects.toMatchObject(forbidden);
@@ -122,5 +125,12 @@ describe('admin.mutations', () => {
       isTrustedLender: true,
       activeListings: 1,
     });
+  });
+
+  it('lists every active listing for removal', async () => {
+    const { asAdmin, toolId } = await world();
+    const { items, isTruncated } = await asAdmin.query(api.admin.queries.tools, { today });
+    expect(isTruncated).toBe(false);
+    expect(items.map((tool) => tool.id)).toEqual([toolId]);
   });
 });

@@ -10,6 +10,9 @@ export const MAX_ADMIN_LOANS = 500;
 /** Most users the admin list returns at once. */
 export const MAX_ADMIN_USERS = 500;
 
+/** Most listings the admin list returns at once. */
+export const MAX_ADMIN_TOOLS = 500;
+
 /** Listings counted per user; the admin only needs to tell "a few" from "many". */
 export const MAX_COUNTED_LISTINGS = 100;
 

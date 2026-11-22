@@ -3,6 +3,7 @@ import {
   Availability,
   AuditAction,
   ErrorCode,
+  MAX_ADMIN_TOOLS,
   MAX_TOOLS_PER_LIST,
   ToolStatus,
 } from '@lendloop/contracts';
@@ -121,6 +122,17 @@ export async function listToolCards(
 ): Promise<ToolCardWithId[]> {
   const tools = await activeTools(ctx, options.category, MAX_TOOLS_PER_LIST);
   return toToolCards(ctx, tools, viewer, options.today);
+}
+
+/** Every active listing for the admin, newest first, saying whether the list was cut. */
+export async function listToolCardsForAdmin(
+  ctx: QueryCtx,
+  admin: Doc<'users'>,
+  today: IsoDate,
+): Promise<{ items: ToolCardWithId[]; isTruncated: boolean }> {
+  const tools = await activeTools(ctx, undefined, MAX_ADMIN_TOOLS + 1);
+  const items = await toToolCards(ctx, tools.slice(0, MAX_ADMIN_TOOLS), admin, today);
+  return { items, isTruncated: tools.length > MAX_ADMIN_TOOLS };
 }
 
 export async function listOwnToolCards(

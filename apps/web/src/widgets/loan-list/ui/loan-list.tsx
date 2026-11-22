@@ -2,13 +2,13 @@
 
 import Link from 'next/link';
 
+import { LoanStatusBadge } from '@/entities/loan';
 import { LenderName } from '@/entities/tool';
-import { Badge } from '@/shared/ui/badge';
+import { formatDateRange } from '@/shared/lib/dates';
 import { Card } from '@/shared/ui/card';
 import { EmptyState } from '@/shared/ui/empty-state';
 import { Skeleton } from '@/shared/ui/skeleton';
 
-import { formatDateRange, statusLook } from './format';
 import { LoanActions } from './loan-actions';
 
 import type { api } from '@/shared/api';
@@ -26,7 +26,6 @@ function LoanItem({
   counterpartLabel: string;
   today: IsoDate;
 }) {
-  const { label, tone } = statusLook(loan.status, loan.isOverdue);
   return (
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -39,7 +38,7 @@ function LoanItem({
             ) : (
               <span className="font-medium text-muted">{loan.toolName}</span>
             )}
-            <Badge tone={tone}>{label}</Badge>
+            <LoanStatusBadge status={loan.status} isOverdue={loan.isOverdue} />
           </div>
           <span className="text-sm text-muted">
             {formatDateRange(loan.startDate, loan.endDate, today)}

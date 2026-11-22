@@ -4,11 +4,13 @@ import {
   cappedListSchema,
   isoDateSchema,
   loanStatusSchema,
+  toolCardSchema,
 } from '@lendloop/contracts';
 import { zid } from 'convex-helpers/server/zod4';
 
 import { adminQuery } from '../functions';
 import { displayDay } from '../lib/today';
+import { listToolCardsForAdmin } from '../tools';
 
 import { listAllLoans, listUsers } from './model';
 
@@ -24,4 +26,11 @@ export const users = adminQuery({
   args: {},
   returns: cappedListSchema(adminUserSchema.extend({ id: zid('users') })),
   handler: async (ctx) => listUsers(ctx),
+});
+
+/** Every active listing, for removal by an admin. */
+export const tools = adminQuery({
+  args: { today: isoDateSchema },
+  returns: cappedListSchema(toolCardSchema.extend({ id: zid('tools') })),
+  handler: async (ctx, { today }) => listToolCardsForAdmin(ctx, ctx.viewer, displayDay(today)),
 });
