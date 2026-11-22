@@ -6,6 +6,7 @@ import { CategoryBadge } from '@/entities/tool';
 import { api } from '@/shared/api';
 import { useToday } from '@/shared/lib/today';
 import { Card } from '@/shared/ui/card';
+import { EmptyState } from '@/shared/ui/empty-state';
 import { Skeleton } from '@/shared/ui/skeleton';
 
 const PLACEHOLDER_COUNT = 6;
@@ -31,11 +32,7 @@ export function PublicToolList() {
   }
 
   if (tools.length === 0) {
-    return (
-      <p className="rounded-xl border border-dashed border-border p-8 text-center text-muted">
-        Nothing to borrow right now. Be the first to list a tool.
-      </p>
-    );
+    return <EmptyState>Nothing to borrow right now. Be the first to list a tool.</EmptyState>;
   }
 
   return (

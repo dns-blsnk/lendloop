@@ -14,6 +14,7 @@ import {
   rangesOverlap,
   SYSTEM_ACTOR,
   todayUtc,
+  ToolStatus,
   transitionProblem,
 } from '@lendloop/contracts';
 
@@ -246,6 +247,7 @@ async function toLoanViews(
         endDate: loan.endDate,
         isOverdue: isOverdue(loan, today),
         toolName: tool?.name ?? REMOVED_TOOL_NAME,
+        isToolListed: tool?.status === ToolStatus.ACTIVE,
         counterpart: { name: person.name, isTrustedLender: person.isTrustedLender },
         actions: availableActions(loan, party, today).filter(isPartyLoanAction),
       };

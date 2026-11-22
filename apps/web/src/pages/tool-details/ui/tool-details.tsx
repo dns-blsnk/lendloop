@@ -4,6 +4,7 @@ import { TOOL_CONDITION_LABELS } from '@lendloop/contracts';
 import { useQuery } from 'convex/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 import { AvailabilityBadge, CategoryBadge, LenderName } from '@/entities/tool';
 import { api, asId } from '@/shared/api';
@@ -30,9 +31,10 @@ export function ToolDetails() {
   const toolId = asId<'tools'>(useRouteParam('id'));
   const today = useToday();
   const router = useRouter();
+  const [isDeleting, setDeleting] = useState(false);
   const tool = useQuery(api.tools.queries.get, today === null ? 'skip' : { today, toolId });
 
-  if (tool === undefined || today === null) {
+  if (tool === undefined || today === null || (tool === null && isDeleting)) {
     return <Skeleton className="h-48 w-full" />;
   }
   if (tool === null) {
@@ -65,9 +67,10 @@ export function ToolDetails() {
               Edit details
             </Link>
             <DeleteToolButton
+              onDeletingChange={setDeleting}
               toolId={toolId}
               onDeleted={() => {
-                router.push('/tools');
+                router.push('/me/listings');
               }}
             />
           </>

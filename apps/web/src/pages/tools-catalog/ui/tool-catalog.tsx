@@ -2,9 +2,10 @@
 
 import { useQuery } from 'convex/react';
 
-import { ToolCard } from '@/entities/tool';
+import { ToolGrid } from '@/entities/tool';
 import { api } from '@/shared/api';
 import { useToday } from '@/shared/lib/today';
+import { EmptyState } from '@/shared/ui/empty-state';
 import { Skeleton } from '@/shared/ui/skeleton';
 
 import { CategoryFilter, useCategoryFilter } from './category-filter';
@@ -24,21 +25,9 @@ function CatalogBody({ tools }: { tools: ReturnType<typeof useTools> }) {
     return <Skeleton className="h-32 w-full" />;
   }
   if (tools.length === 0) {
-    return (
-      <p className="rounded-xl border border-dashed border-border p-8 text-center text-muted">
-        No tools in this category yet.
-      </p>
-    );
+    return <EmptyState>No tools in this category yet.</EmptyState>;
   }
-  return (
-    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {tools.map((tool) => (
-        <li key={tool.id}>
-          <ToolCard tool={tool} href={`/tools/${tool.id}`} />
-        </li>
-      ))}
-    </ul>
-  );
+  return <ToolGrid tools={tools} />;
 }
 
 /** Every listed tool with its availability, filterable by category through the URL. */

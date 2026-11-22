@@ -226,6 +226,8 @@ export const loanViewSchema = z.object({
   endDate: isoDateSchema,
   isOverdue: z.boolean(),
   toolName: z.string(),
+  /** False once the tool was deleted or removed, so the UI stops linking to it. */
+  isToolListed: z.boolean(),
   counterpart: z.object({ name: z.string(), isTrustedLender: z.boolean() }),
   actions: z.array(partyLoanActionSchema),
 });
