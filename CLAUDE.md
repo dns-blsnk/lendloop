@@ -72,6 +72,7 @@ Tests are exempt from size limits and `no-magic-numbers`.
 - No default exports except where a framework requires them (Next route files, configs)
 - Exhaustive `switch`; no floating promises; no `console`; import order and no cycles
 - `process.env` only in the env modules (`apps/web/src/shared/config/env.ts`,
+  `packages/backend/convex/auth.config.ts` (evaluated at deploy time, validates its own variable),
   `packages/backend/convex/lib/env.ts`), validated with zod
 
 ### Naming

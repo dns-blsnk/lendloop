@@ -43,8 +43,13 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # Public values only (the publishable key and Convex URL end up in the browser bundle anyway);
+      # set them as repository variables. The build validates them and fails fast without them.
       - name: Build
         run: pnpm build
+        env:
+          NEXT_PUBLIC_CONVEX_URL: ${{ vars.NEXT_PUBLIC_CONVEX_URL }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
 
   # Separate job: a fresh upstream advisory shows up as its own red check instead of hiding the
   # result of lint, typecheck, tests and build.

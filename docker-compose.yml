@@ -1,0 +1,40 @@
+# Local stack. Ports bind to 127.0.0.1 only: nothing here is reachable from the network.
+# Images are pinned by digest so a teammate gets the exact same backend.
+services:
+  convex-backend:
+    image: ghcr.io/convex/convex-backend@sha256:d4e012c68640830310139632481f8d1c1915bdf66de5c3a594a99799eab51679
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    ports:
+      - '127.0.0.1:3210:3210' # client API and websocket
+      - '127.0.0.1:3211:3211' # HTTP actions (n8n endpoints)
+    volumes:
+      - convex-data:/convex/data
+    environment:
+      - INSTANCE_NAME=lendloop-local
+      - INSTANCE_SECRET=${CONVEX_INSTANCE_SECRET:?set CONVEX_INSTANCE_SECRET in .env}
+      - CONVEX_CLOUD_ORIGIN=http://127.0.0.1:3210
+      - CONVEX_SITE_ORIGIN=http://127.0.0.1:3211
+      - DISABLE_BEACON=true
+      - REDACT_LOGS_TO_CLIENT=true
+      - DOCUMENT_RETENTION_DELAY=172800
+      - RUST_LOG=info
+    healthcheck:
+      test: curl -f http://localhost:3210/version
+      interval: 5s
+      start_period: 10s
+
+  convex-dashboard:
+    image: ghcr.io/convex/convex-dashboard@sha256:2cb0f7e51597ea41d08147649f9f65cb2676aa96ce1f2fce1531116a408e1c98
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    ports:
+      - '127.0.0.1:6791:6791'
+    environment:
+      - NEXT_PUBLIC_DEPLOYMENT_URL=http://127.0.0.1:3210
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+
+volumes:
+  convex-data:

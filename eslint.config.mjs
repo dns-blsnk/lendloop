@@ -1,3 +1,7 @@
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+import convexPlugin from '@convex-dev/eslint-plugin';
 import js from '@eslint/js';
 import nextPlugin from '@next/eslint-plugin-next';
 import prettier from 'eslint-config-prettier';
@@ -18,6 +22,7 @@ const MAX_COMPONENT_LINES = 120;
 const MAX_FILE_LINES = 300;
 
 const WEB = 'apps/web';
+const CONVEX = 'packages/backend/convex';
 
 const envMessage = 'Read configuration through the typed env module.';
 const envRestrictions = [
@@ -39,6 +44,38 @@ const envRestrictions = [
     message: envMessage,
   },
 ];
+
+const envImportRestrictions = [
+  { name: 'process', importNames: ['env'], message: envMessage },
+  { name: 'node:process', importNames: ['env'], message: envMessage },
+];
+
+/**
+ * Convex modules talk to each other only through their index.ts (and schema.ts reads their
+ * tables.ts); every other file of a module is internal to it. One zone per module folder, built
+ * from the folder list when the config loads (an editor's ESLint server needs a restart to see a
+ * new module; CI always sees it).
+ */
+const SHARED_CONVEX_FOLDERS = new Set(['_generated', 'lib', 'domain', 'test']);
+const convexEntries = readdirSync(join(import.meta.dirname, CONVEX), { withFileTypes: true });
+const convexModules = convexEntries
+  .filter((entry) => entry.isDirectory() && !SHARED_CONVEX_FOLDERS.has(entry.name))
+  .map((entry) => entry.name);
+const convexTopLevel = convexEntries
+  .filter((entry) => entry.name !== '_generated' && !convexModules.includes(entry.name))
+  .map((entry) => entry.name);
+const convexModuleZones = convexModules.map((name) => ({
+  target: [
+    ...convexTopLevel.map((entry) => `${CONVEX}/${entry}`),
+    ...convexModules.filter((other) => other !== name).map((other) => `${CONVEX}/${other}`),
+  ],
+  from: `${CONVEX}/${name}`,
+  except: ['./index.ts', './tables.ts'],
+  message: `Import it from ${name}/index.ts.`,
+}));
+
+const rawBuilderMessage =
+  'Build functions with the wrappers in convex/functions.ts so every function declares who may call it.';
 
 const sourceFiles = ['**/*.ts', '**/*.tsx'];
 const exemptFromLimits = ['**/*.spec.ts', '**/*.spec.tsx', '**/test/**'];
@@ -142,15 +179,7 @@ export default tseslint.config(
         { 'ts-expect-error': true, 'ts-ignore': true },
       ],
       'import-x/no-default-export': 'error',
-      'no-restricted-imports': [
-        'error',
-        {
-          paths: [
-            { name: 'process', importNames: ['env'], message: envMessage },
-            { name: 'node:process', importNames: ['env'], message: envMessage },
-          ],
-        },
-      ],
+      'no-restricted-imports': ['error', { paths: envImportRestrictions }],
       '@typescript-eslint/naming-convention': [
         'error',
         { selector: 'typeLike', format: ['PascalCase'] },
@@ -215,15 +244,62 @@ export default tseslint.config(
       complexity: 'off',
     },
   },
+  ...convexPlugin.configs.recommended,
   {
-    // Only the env modules may touch process.env.
-    files: [`${WEB}/src/shared/config/env.ts`, 'packages/backend/convex/lib/env.ts'],
-    rules: { 'no-restricted-syntax': 'off', 'no-restricted-imports': 'off' },
+    files: [`${CONVEX}/**/*.ts`],
+    rules: {
+      '@convex-dev/no-filter-in-query': 'error',
+      'import-x/no-restricted-paths': [
+        'error',
+        { basePath: import.meta.dirname, zones: convexModuleZones },
+      ],
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: envImportRestrictions,
+          patterns: [
+            {
+              group: ['**/_generated/server'],
+              importNames: [
+                'query',
+                'mutation',
+                'action',
+                'internalQuery',
+                'internalMutation',
+                'internalAction',
+              ],
+              message: rawBuilderMessage,
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // The one place that turns the raw builders into access-checked wrappers.
+    files: [`${CONVEX}/functions.ts`],
+    rules: { 'no-restricted-imports': ['error', { paths: envImportRestrictions }] },
+  },
+  {
+    // Only the env modules may touch process.env. Convex reads the auth config at deploy time.
+    files: [`${WEB}/src/shared/config/env.ts`, `${CONVEX}/lib/env.ts`, `${CONVEX}/auth.config.ts`],
+    rules: {
+      'no-restricted-syntax': 'off',
+      'no-restricted-imports': 'off',
+      '@convex-dev/no-process-env': 'off',
+    },
   },
   {
     // Frameworks that load these files expect a default export. The Next `app/` folder holds only
     // route files (pages, layouts, route handlers, metadata files) that re-export from `src/`.
-    files: ['**/*.config.ts', '**/*.config.mts', `${WEB}/app/**/*.{ts,tsx}`, `${WEB}/proxy.ts`],
+    // Convex loads the schema, auth config, HTTP router and crons by default export.
+    files: [
+      '**/*.config.ts',
+      '**/*.config.mts',
+      `${WEB}/app/**/*.{ts,tsx}`,
+      `${WEB}/proxy.ts`,
+      `${CONVEX}/{schema,auth.config,http,crons}.ts`,
+    ],
     rules: { 'import-x/no-default-export': 'off' },
   },
   prettier,

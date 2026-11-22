@@ -11,10 +11,14 @@
     "lint:fsd": "steiger ./src"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.10.7",
+    "@lendloop/backend": "workspace:*",
     "@lendloop/contracts": "workspace:*",
+    "convex": "^1.51.0",
     "next": "16.4.6",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@feature-sliced/steiger-plugin": "0.8.2",
