@@ -79,7 +79,7 @@ Tests are exempt from size limits and `no-magic-numbers`.
 
 - `PascalCase` types and components, `camelCase` values and functions, `UPPER_SNAKE_CASE` fixed
   module-level constants. Booleans read as questions (`isOverdue`, `canApprove`)
-- Files `kebab-case.ts`; tests next to the code as `*.spec.ts`
+- Files `kebab-case.ts` (Convex modules use `snake_case.ts`: Convex rejects `-` in module paths); tests next to the code as `*.spec.ts`
 
 ### Comments
 

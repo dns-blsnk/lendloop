@@ -17,3 +17,9 @@ export function boundedText(min: number, max: number) {
       message: `Use at most ${String(max)} characters.`,
     });
 }
+
+/** The first word of a display name, for a greeting that does not repeat the full name. */
+export function firstNameOf(name: string): string {
+  const trimmed = name.trim();
+  return trimmed.split(/\s+/)[0] ?? trimmed;
+}

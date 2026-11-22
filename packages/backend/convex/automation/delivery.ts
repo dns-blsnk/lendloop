@@ -1,3 +1,5 @@
+import { firstNameOf } from '@lendloop/contracts';
+
 import type { Doc, Id } from '../_generated/dataModel';
 import type { MutationCtx, QueryCtx } from '../_generated/server';
 import type { LoanEventPayload } from '@lendloop/contracts';
@@ -19,11 +21,6 @@ export const MAX_ATTEMPTS = RETRY_DELAYS_MS.length + 1;
 /** While n8n is not configured, events wait this long between checks without using attempts. */
 export const NOT_CONFIGURED_RECHECK_MS = TEN_MINUTES_MS;
 
-/** The first word of a display name, for a friendly greeting without the full name. */
-function firstName(name: string): string {
-  return name.split(/\s+/)[0] ?? name;
-}
-
 /** The event as sent: its snapshot plus the recipient's current address. Null if they are gone. */
 export async function buildPayload(
   ctx: QueryCtx,
@@ -37,7 +34,7 @@ export async function buildPayload(
     eventId: event._id,
     type: event.type,
     occurredAt: new Date(event._creationTime).toISOString(),
-    recipient: { firstName: firstName(recipient.name), email: recipient.email },
+    recipient: { firstName: firstNameOf(recipient.name), email: recipient.email },
     loan: event.snapshot,
   };
 }

@@ -1,0 +1,182 @@
+import {
+  ActivityKind,
+  daysBetween,
+  DeliveryStatus,
+  ErrorCode,
+  firstNameOf,
+  LoanStatus,
+  notificationKey,
+  parseReminderKey,
+  reminderKey,
+} from '@lendloop/contracts';
+
+import { domainError } from '../lib/errors';
+
+import type { Id } from '../_generated/dataModel';
+import type { MutationCtx, QueryCtx } from '../_generated/server';
+import type { IsoDate, LoanEventType, OverdueLoan } from '@lendloop/contracts';
+
+export const OVERDUE_WORKFLOW = 'overdue-reminders';
+
+/** Most reminders one run returns; the rest come with the next run. */
+const MAX_REMINDERS_PER_RUN = 200;
+/** Most overdue loans one run looks through to find those not reminded yet today. */
+const MAX_OVERDUE_SCANNED = 2000;
+
+interface ActivityRecord {
+  idempotencyKey: string;
+  loanId: Id<'loans'>;
+  kind: ActivityKind;
+  eventType?: LoanEventType;
+  status: DeliveryStatus;
+  error?: string;
+}
+
+function findByKey(ctx: QueryCtx, key: string) {
+  return ctx.db
+    .query('automationActivity')
+    .withIndex('by_key', (q) => q.eq('idempotencyKey', key))
+    .unique();
+}
+
+/**
+ * One row per key, however often n8n retries. A recorded success is final: a late "failed" for
+ * the same key (an earlier attempt finishing last) does not overwrite it.
+ */
+async function upsertActivity(ctx: MutationCtx, record: ActivityRecord): Promise<void> {
+  const existing = await findByKey(ctx, record.idempotencyKey);
+  if (existing === null) {
+    await ctx.db.insert('automationActivity', { ...record, reportedAt: Date.now() });
+    return;
+  }
+  if (existing.status === DeliveryStatus.SENT) {
+    return;
+  }
+  await ctx.db.patch('automationActivity', existing._id, {
+    status: record.status,
+    error: record.error,
+    reportedAt: Date.now(),
+  });
+}
+
+export async function recordHeartbeat(ctx: MutationCtx, name: string): Promise<void> {
+  const existing = await ctx.db
+    .query('automationHeartbeats')
+    .withIndex('by_name', (q) => q.eq('name', name))
+    .unique();
+  if (existing === null) {
+    await ctx.db.insert('automationHeartbeats', { name, lastRunAt: Date.now() });
+  } else {
+    await ctx.db.patch('automationHeartbeats', existing._id, { lastRunAt: Date.now() });
+  }
+}
+
+/**
+ * Approved loans past their last day that have not had a successful reminder on `today`. Loans
+ * already reminded are skipped before the limit applies, so a long list is worked through in turn.
+ */
+export async function listOverdueLoans(ctx: QueryCtx, today: IsoDate): Promise<OverdueLoan[]> {
+  const late = await ctx.db
+    .query('loans')
+    .withIndex('by_status_endDate', (q) => q.eq('status', LoanStatus.APPROVED).lt('endDate', today))
+    .take(MAX_OVERDUE_SCANNED);
+  const due: OverdueLoan[] = [];
+  for (const loan of late) {
+    if (due.length === MAX_REMINDERS_PER_RUN) {
+      break;
+    }
+    const key = reminderKey(loan._id, today);
+    const [done, borrower, tool] = await Promise.all([
+      findByKey(ctx, key),
+      ctx.db.get('users', loan.borrowerId),
+      ctx.db.get('tools', loan.toolId),
+    ]);
+    if (done?.status !== DeliveryStatus.SENT && borrower !== null && tool !== null) {
+      due.push({
+        loanId: loan._id,
+        reminderKey: key,
+        borrower: { firstName: firstNameOf(borrower.name), email: borrower.email },
+        toolName: tool.name,
+        endDate: loan.endDate,
+        daysOverdue: daysBetween(loan.endDate, today),
+      });
+    }
+  }
+  return due;
+}
+
+export async function recordReminder(
+  ctx: MutationCtx,
+  report: {
+    loanId: string;
+    reminderKey: string;
+    status: DeliveryStatus;
+    error?: string | undefined;
+  },
+): Promise<void> {
+  // The key must be exactly this loan's key for a real day, and the loan must exist, so a
+  // write-back can neither be filed under another loan nor under a key nobody looks up.
+  const parsed = parseReminderKey(report.reminderKey);
+  const loanId = ctx.db.normalizeId('loans', report.loanId);
+  const loan = loanId === null ? null : await ctx.db.get('loans', loanId);
+  if (loan === null || parsed?.loanId !== loan._id) {
+    throw domainError(ErrorCode.VALIDATION_FAILED, 'Unknown loan or reminder key.');
+  }
+  await upsertActivity(ctx, {
+    idempotencyKey: report.reminderKey,
+    loanId: loan._id,
+    kind: ActivityKind.REMINDER,
+    status: report.status,
+    ...(report.error === undefined ? {} : { error: report.error }),
+  });
+}
+
+/**
+ * n8n reports how sending a notification went. A "sent" report also settles the outbox: the
+ * email went out even if Convex never saw n8n's HTTP answer (lost response, retries used up).
+ */
+export async function recordNotificationAck(
+  ctx: MutationCtx,
+  report: { eventId: string; status: DeliveryStatus; error?: string | undefined },
+): Promise<void> {
+  const eventId = ctx.db.normalizeId('outboundEvents', report.eventId);
+  const event = eventId === null ? null : await ctx.db.get('outboundEvents', eventId);
+  if (event === null) {
+    throw domainError(ErrorCode.VALIDATION_FAILED, 'Unknown event.');
+  }
+  if (report.status === DeliveryStatus.SENT && event.status !== 'delivered') {
+    await ctx.db.patch('outboundEvents', event._id, {
+      status: 'delivered',
+      deliveredAt: Date.now(),
+    });
+  }
+  await upsertActivity(ctx, {
+    idempotencyKey: notificationKey(event._id),
+    loanId: event.loanId,
+    kind: ActivityKind.NOTIFICATION,
+    eventType: event.type,
+    status: report.status,
+    ...(report.error === undefined ? {} : { error: report.error }),
+  });
+}
+
+/** Idempotent per n8n execution: the error workflow may be retried too. */
+export async function recordWorkflowError(
+  ctx: MutationCtx,
+  report: { executionId: string; workflow: string; node?: string | undefined; message: string },
+): Promise<void> {
+  const existing = await ctx.db
+    .query('workflowErrors')
+    .withIndex('by_execution', (q) => q.eq('executionId', report.executionId))
+    .unique();
+  if (existing !== null) {
+    return;
+  }
+  await ctx.db.insert('workflowErrors', {
+    executionId: report.executionId,
+    workflow: report.workflow,
+    message: report.message,
+    reportedAt: Date.now(),
+    ...(report.node === undefined ? {} : { node: report.node }),
+  });
+}
