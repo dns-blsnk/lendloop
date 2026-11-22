@@ -8,8 +8,11 @@
  * @module
  */
 
+import type * as audit_tables from "../audit/tables.js";
 import type * as functions from "../functions.js";
 import type * as lib_errors from "../lib/errors.js";
+import type * as loans_tables from "../loans/tables.js";
+import type * as tools_tables from "../tools/tables.js";
 import type * as users_index from "../users/index.js";
 import type * as users_internal from "../users/internal.js";
 import type * as users_model from "../users/model.js";
@@ -24,8 +27,11 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "audit/tables": typeof audit_tables;
   functions: typeof functions;
   "lib/errors": typeof lib_errors;
+  "loans/tables": typeof loans_tables;
+  "tools/tables": typeof tools_tables;
   "users/index": typeof users_index;
   "users/internal": typeof users_internal;
   "users/model": typeof users_model;

@@ -1,0 +1,19 @@
+import { z } from 'zod';
+
+/** Length in characters as people count them (code points), not UTF-16 units. */
+export function characterCount(text: string): number {
+  return Array.from(text).length;
+}
+
+/** Trimmed text whose length is checked in characters, so emoji count once. */
+export function boundedText(min: number, max: number) {
+  return z
+    .string()
+    .trim()
+    .refine((text) => characterCount(text) >= min, {
+      message: `Use at least ${String(min)} characters.`,
+    })
+    .refine((text) => characterCount(text) <= max, {
+      message: `Use at most ${String(max)} characters.`,
+    });
+}

@@ -95,7 +95,8 @@ Tests are exempt from size limits and `no-magic-numbers`.
 
 - Modular monolith by domain: `convex/<module>/` with `queries.ts`, `mutations.ts`, `model.ts`
   (data access and orchestration through `ctx.db`) and `index.ts` (what neighbour modules may use).
-  Pure business rules (state transitions, date overlap, availability, overdue) live in
+  Pure business rules the web app also needs (status transitions, date ranges) live in
+  `packages/contracts`; backend-only pure rules (availability, overdue selection) live in
   `convex/domain/` without `ctx`
 - Public functions are thin: validated args → current user → one model call → DTO
 - Deny by default: functions are built only from the wrappers in `convex/functions.ts`
