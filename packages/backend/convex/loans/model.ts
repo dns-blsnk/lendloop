@@ -1,4 +1,6 @@
 import {
+  FORMER_NEIGHBOUR_NAME,
+  REMOVED_TOOL_NAME,
   AuditAction,
   availableActions,
   ErrorCode,
@@ -34,7 +36,7 @@ const AUDIT_ACTION_FOR: Readonly<Record<LoanAction, AuditAction>> = {
   [LoanAction.WITHDRAW_FOR_REMOVED_TOOL]: AuditAction.LOAN_WITHDRAWN,
 };
 
-const FORMER_NEIGHBOUR = { name: 'Former neighbour', isTrustedLender: false };
+const FORMER_NEIGHBOUR = { name: FORMER_NEIGHBOUR_NAME, isTrustedLender: false };
 
 export function loansOfTool(
   ctx: QueryCtx,
@@ -243,7 +245,7 @@ async function toLoanViews(
         startDate: loan.startDate,
         endDate: loan.endDate,
         isOverdue: isOverdue(loan, today),
-        toolName: tool?.name ?? 'Removed tool',
+        toolName: tool?.name ?? REMOVED_TOOL_NAME,
         counterpart: { name: person.name, isTrustedLender: person.isTrustedLender },
         actions: availableActions(loan, party, today).filter(isPartyLoanAction),
       };

@@ -1,4 +1,5 @@
 import {
+  FORMER_NEIGHBOUR_NAME,
   Availability,
   AuditAction,
   ErrorCode,
@@ -27,7 +28,7 @@ export type ToolCardWithId = ToolCard & { id: Id<'tools'> };
 /** How many listings the public page looks through to find the ones free today. */
 const MAX_TOOLS_SCANNED_FOR_PUBLIC_LIST = 1000;
 
-const FORMER_NEIGHBOUR: Lender = { name: 'Former neighbour', isTrustedLender: false };
+const FORMER_NEIGHBOUR: Lender = { name: FORMER_NEIGHBOUR_NAME, isTrustedLender: false };
 
 /** A listing that is still on the board; removed ones look like they never existed. */
 export async function getActiveTool(ctx: QueryCtx, toolId: Id<'tools'>): Promise<Doc<'tools'>> {

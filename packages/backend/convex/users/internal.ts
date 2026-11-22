@@ -1,6 +1,7 @@
-import { ErrorCode, roleSchema } from '@lendloop/contracts';
+import { AuditAction, ErrorCode, roleSchema, SYSTEM_ACTOR } from '@lendloop/contracts';
 import { z } from 'zod';
 
+import { recordAudit } from '../audit';
 import { internalMutation } from '../functions';
 import { domainError } from '../lib/errors';
 
@@ -28,7 +29,15 @@ export const setRole = internalMutation({
     if (other !== undefined) {
       throw domainError(ErrorCode.CONFLICT, 'Several accounts share that email.');
     }
+    if (user.role === role) {
+      return null;
+    }
     await ctx.db.patch('users', user._id, { role });
+    await recordAudit(ctx, {
+      action: AuditAction.USER_ROLE_CHANGED,
+      actorId: SYSTEM_ACTOR,
+      userId: user._id,
+    });
     return null;
   },
 });

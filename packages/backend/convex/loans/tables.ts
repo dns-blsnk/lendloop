@@ -18,6 +18,9 @@ export const loansTables = {
     .index('by_tool_status', ['toolId', 'status'])
     .index('by_owner_status', ['ownerId', 'status'])
     .index('by_borrower_status', ['borrowerId', 'status'])
+    // The admin list filters by status newest first; the date indexes sort by date instead.
+    // eslint-disable-next-line @convex-dev/no-duplicate-indexes -- needs _creationTime order
+    .index('by_status', ['status'])
     .index('by_status_startDate', ['status', 'startDate'])
     .index('by_status_endDate', ['status', 'endDate']),
 };

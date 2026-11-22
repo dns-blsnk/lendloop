@@ -8,6 +8,9 @@
  * @module
  */
 
+import type * as admin_model from "../admin/model.js";
+import type * as admin_mutations from "../admin/mutations.js";
+import type * as admin_queries from "../admin/queries.js";
 import type * as audit_index from "../audit/index.js";
 import type * as audit_model from "../audit/model.js";
 import type * as audit_tables from "../audit/tables.js";
@@ -41,6 +44,9 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "admin/model": typeof admin_model;
+  "admin/mutations": typeof admin_mutations;
+  "admin/queries": typeof admin_queries;
   "audit/index": typeof audit_index;
   "audit/model": typeof audit_model;
   "audit/tables": typeof audit_tables;
