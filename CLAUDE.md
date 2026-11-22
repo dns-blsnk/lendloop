@@ -109,7 +109,8 @@ Tests are exempt from size limits and `no-magic-numbers`.
   email, internal ids) can leak
 - Throw `domainError(code, message)` (a `ConvexError` with a code from contracts); the UI maps codes
   to messages. Never throw strings or bare `Error` for expected cases
-- Never log secrets, tokens, signatures, emails or full payloads
+- Never log secrets, tokens, signatures, emails or full payloads. One documented exception: n8n
+  keeps the payload of a _failed_ execution for three days so it can be inspected and retried
 
 ### Frontend (Next.js, `apps/web`)
 

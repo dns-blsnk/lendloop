@@ -36,5 +36,69 @@ services:
       convex-backend:
         condition: service_healthy
 
+  # Workflow automation. Secrets come from .env and n8n credentials, never from workflow JSON.
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.48.7@sha256:fabce3e9678a07d2dde83bd8f5124017f3ec457d0a3fc6b63bb4cec465d63861
+    ports:
+      - '127.0.0.1:5678:5678'
+    volumes:
+      - n8n-data:/home/node/.n8n
+    # The credential encryption key is read from a file, so it is not part of the environment
+    # that workflows can see through $env.
+    secrets:
+      - n8n_encryption_key
+    environment:
+      - N8N_ENCRYPTION_KEY_FILE=/run/secrets/n8n_encryption_key
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      # Plain HTTP on localhost only; behind TLS in production.
+      - N8N_SECURE_COOKIE=false
+      - GENERIC_TIMEZONE=UTC
+      - TZ=UTC
+      # Data minimisation: successful runs keep no payloads (they hold emails). Failed runs are kept
+      # for three days so they can be inspected and retried, then pruned; the error workflow
+      # reports failures to Convex without any payload.
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=none
+      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
+      - EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=false
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=72
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_PERSONALIZATION_ENABLED=false
+      - N8N_VERSION_NOTIFICATIONS_ENABLED=false
+      # Workflows read the two signing secrets through $env. Anyone who can edit workflows can read
+      # them, as they could read any n8n credential; the encryption key stays out (see above).
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - NODE_FUNCTION_ALLOW_BUILTIN=crypto
+      - LENDLOOP_CONVEX_TO_N8N_SECRET=${CONVEX_TO_N8N_SECRET:?set CONVEX_TO_N8N_SECRET in .env}
+      - LENDLOOP_N8N_TO_CONVEX_SECRET=${N8N_TO_CONVEX_SECRET:?set N8N_TO_CONVEX_SECRET in .env}
+      - LENDLOOP_CONVEX_SITE_URL=http://convex-backend:3211
+    healthcheck:
+      test: wget -q -O - http://localhost:5678/healthz || exit 1
+      interval: 10s
+      start_period: 20s
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+
+  # Catches every email n8n sends; nothing leaves the machine. Inbox at http://localhost:8025.
+  mailpit:
+    image: axllent/mailpit:v1.34.0@sha256:23a2ef85bc50853ab3093645d1d64679afd8887e89da5e48a88940c172591a4e
+    ports:
+      - '127.0.0.1:8025:8025'
+    environment:
+      - MP_SMTP_AUTH_ACCEPT_ANY=true
+      - MP_SMTP_AUTH_ALLOW_INSECURE=true
+      - MP_MAX_MESSAGES=500
+
+secrets:
+  n8n_encryption_key:
+    environment: N8N_ENCRYPTION_KEY
+
 volumes:
   convex-data:
+  n8n-data:

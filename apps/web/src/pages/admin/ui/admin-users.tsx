@@ -26,7 +26,7 @@ export function AdminUsers() {
   const today = useToday();
   const result = useQuery(api.admin.queries.users, {});
   const setTrusted = useMutation(api.admin.mutations.setTrusted);
-  const { pendingId, error, run } = usePendingRow();
+  const { isPending, error, run } = usePendingRow();
 
   if (result === undefined || today === null) {
     return <Skeleton className="h-32 w-full" />;
@@ -57,7 +57,7 @@ export function AdminUsers() {
                 <td className="px-4 py-2">
                   <Button
                     variant={user.isTrustedLender ? 'secondary' : 'primary'}
-                    disabled={pendingId === user.id}
+                    disabled={isPending(user.id)}
                     onClick={() =>
                       void run(user.id, () =>
                         setTrusted({ userId: user.id, isTrustedLender: !user.isTrustedLender }),

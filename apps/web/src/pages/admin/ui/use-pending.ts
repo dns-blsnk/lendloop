@@ -5,24 +5,36 @@ import { useState } from 'react';
 import { errorMessage } from '@/shared/lib/errors';
 
 /**
- * Runs one admin mutation at a time per row: the row's button stays disabled until the server
- * answers, so a double click cannot send the request twice.
+ * Tracks admin mutations per row: a row's button stays disabled until its own request answers,
+ * even while other rows are busy, so a double click cannot send the same request twice.
  */
 export function usePendingRow() {
-  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
+  const update = (rowId: string, isPending: boolean) => {
+    setPending((current) => {
+      const next = new Set(current);
+      if (isPending) {
+        next.add(rowId);
+      } else {
+        next.delete(rowId);
+      }
+      return next;
+    });
+  };
+
   const run = async (rowId: string, task: () => Promise<unknown>) => {
-    setPendingId(rowId);
+    update(rowId, true);
     setError(null);
     try {
       await task();
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
-      setPendingId(null);
+      update(rowId, false);
     }
   };
 
-  return { pendingId, error, run };
+  return { isPending: (rowId: string) => pending.has(rowId), error, run };
 }

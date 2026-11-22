@@ -16,7 +16,7 @@ export function AdminListings() {
   const today = useToday();
   const result = useQuery(api.admin.queries.tools, today === null ? 'skip' : { today });
   const removeTool = useMutation(api.admin.mutations.removeTool);
-  const { pendingId, error, run } = usePendingRow();
+  const { isPending, error, run } = usePendingRow();
 
   if (result === undefined) {
     return <Skeleton className="h-32 w-full" />;
@@ -38,7 +38,7 @@ export function AdminListings() {
             </div>
             <Button
               variant="danger"
-              disabled={pendingId === tool.id}
+              disabled={isPending(tool.id)}
               onClick={() => {
                 const question = `Remove "${tool.name}"? Its open requests and future loans are cancelled.`;
                 if (window.confirm(question)) {

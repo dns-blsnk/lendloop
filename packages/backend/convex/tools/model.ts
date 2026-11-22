@@ -1,6 +1,5 @@
 import {
   FORMER_NEIGHBOUR_NAME,
-  Availability,
   AuditAction,
   ErrorCode,
   MAX_ADMIN_TOOLS,
@@ -11,7 +10,7 @@ import {
 import { recordAudit } from '../audit';
 import { availabilityOf } from '../domain/availability';
 import { domainError } from '../lib/errors';
-import { approvedLoansOfTool, withdrawLoansOfRemovedTool } from '../loans';
+import { approvedLoansOfTool, toolIdsOutOnLoan, withdrawLoansOfRemovedTool } from '../loans';
 
 import type { Doc, Id } from '../_generated/dataModel';
 import type { MutationCtx, QueryCtx } from '../_generated/server';
@@ -22,6 +21,7 @@ import type {
   ToolCard,
   ToolCategory,
   ToolFields,
+  Availability,
 } from '@lendloop/contracts';
 
 export type ToolCardWithId = ToolCard & { id: Id<'tools'> };
@@ -73,13 +73,14 @@ async function toToolCards(
   viewer: Doc<'users'>,
   today: IsoDate,
 ): Promise<ToolCardWithId[]> {
-  const lenders = new Map<Id<'users'>, Lender>([[viewer._id, viewer]]);
-  for (const ownerId of new Set(tools.map((tool) => tool.ownerId))) {
-    if (!lenders.has(ownerId)) {
-      const owner = await ctx.db.get('users', ownerId);
-      lenders.set(ownerId, owner ?? FORMER_NEIGHBOUR);
-    }
-  }
+  const ownerIds = [...new Set(tools.map((tool) => tool.ownerId))].filter(
+    (id) => id !== viewer._id,
+  );
+  const owners = await Promise.all(ownerIds.map((id) => ctx.db.get('users', id)));
+  const lenders = new Map<Id<'users'>, Lender>([
+    [viewer._id, viewer],
+    ...ownerIds.map((id, index): [Id<'users'>, Lender] => [id, owners[index] ?? FORMER_NEIGHBOUR]),
+  ]);
   return Promise.all(
     tools.map(async (tool) => {
       const lender = lenders.get(tool.ownerId) ?? FORMER_NEIGHBOUR;
@@ -102,17 +103,14 @@ export async function listPublicTools(
   ctx: QueryCtx,
   today: IsoDate,
 ): Promise<(PublicTool & { id: Id<'tools'> })[]> {
-  const tools = await activeTools(ctx, undefined, MAX_TOOLS_SCANNED_FOR_PUBLIC_LIST);
-  const free: (PublicTool & { id: Id<'tools'> })[] = [];
-  for (const tool of tools) {
-    if (free.length === MAX_TOOLS_PER_LIST) {
-      break;
-    }
-    if ((await toolAvailability(ctx, tool._id, today)) === Availability.AVAILABLE) {
-      free.push({ id: tool._id, name: tool.name, category: tool.category });
-    }
-  }
-  return free;
+  const [tools, outOnLoan] = await Promise.all([
+    activeTools(ctx, undefined, MAX_TOOLS_SCANNED_FOR_PUBLIC_LIST),
+    toolIdsOutOnLoan(ctx, today),
+  ]);
+  return tools
+    .filter((tool) => !outOnLoan.has(tool._id))
+    .slice(0, MAX_TOOLS_PER_LIST)
+    .map((tool) => ({ id: tool._id, name: tool.name, category: tool.category }));
 }
 
 export async function listToolCards(

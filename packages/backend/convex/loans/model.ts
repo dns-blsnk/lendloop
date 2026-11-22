@@ -81,6 +81,17 @@ async function applyTransition(
   });
 }
 
+/** Tools out with a borrower today: approved loans whose first day has come, in one index read. */
+export async function toolIdsOutOnLoan(ctx: QueryCtx, today: IsoDate): Promise<Set<Id<'tools'>>> {
+  const underWay = await ctx.db
+    .query('loans')
+    .withIndex('by_status_startDate', (q) =>
+      q.eq('status', LoanStatus.APPROVED).lte('startDate', today),
+    )
+    .collect();
+  return new Set(underWay.map((loan) => loan.toolId));
+}
+
 /**
  * Cancels every open request and every approved loan of a tool that is being taken off the board.
  * Refuses (and changes nothing) while a loan is under way: the borrower has the tool.
@@ -208,17 +219,28 @@ export async function actOnLoan(
 }
 
 /** Declines requests nobody answered before their first day; run daily by a cron. */
-export async function expireStaleRequests(ctx: MutationCtx, today: IsoDate): Promise<number> {
+/** Requests expired per run; the cron job reschedules itself until none are left. */
+export const STALE_REQUESTS_PER_RUN = 100;
+
+/**
+ * Declines up to one batch of requests nobody answered before their first day. Returns how many
+ * it declined and whether more are waiting, so the caller can run again within transaction limits.
+ */
+export async function expireStaleRequests(
+  ctx: MutationCtx,
+  today: IsoDate,
+): Promise<{ expired: number; hasMore: boolean }> {
   const stale = await ctx.db
     .query('loans')
     .withIndex('by_status_startDate', (q) =>
       q.eq('status', LoanStatus.REQUESTED).lt('startDate', today),
     )
-    .collect();
-  for (const loan of stale) {
+    .take(STALE_REQUESTS_PER_RUN + 1);
+  const batch = stale.slice(0, STALE_REQUESTS_PER_RUN);
+  for (const loan of batch) {
     await applyTransition(ctx, loan, LoanAction.AUTO_DECLINE, SYSTEM_ACTOR);
   }
-  return stale.length;
+  return { expired: batch.length, hasMore: stale.length > STALE_REQUESTS_PER_RUN };
 }
 
 async function toLoanViews(

@@ -259,6 +259,7 @@ describe('loans.internal.expireStale', () => {
     expect(await t.mutation(internal.loans.internal.expireStale, {})).toEqual({
       expired: MAX_OPEN_REQUESTS_PER_BORROWER,
     });
+    await t.finishAllScheduledFunctions(() => undefined);
     expect(await status(stale[0] as Id<'loans'>)).toBe(LoanStatus.DECLINED);
     expect(await status(fresh)).toBe(LoanStatus.REQUESTED);
   });

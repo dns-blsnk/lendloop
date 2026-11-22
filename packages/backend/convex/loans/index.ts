@@ -1,1 +1,1 @@
-export { approvedLoansOfTool, withdrawLoansOfRemovedTool } from './model';
+export { approvedLoansOfTool, toolIdsOutOnLoan, withdrawLoansOfRemovedTool } from './model';
