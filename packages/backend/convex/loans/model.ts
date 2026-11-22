@@ -239,7 +239,6 @@ export async function actOnLoan(
   }
 }
 
-/** Declines requests nobody answered before their first day; run daily by a cron. */
 /** Requests expired per run; the cron job reschedules itself until none are left. */
 export const STALE_REQUESTS_PER_RUN = 100;
 

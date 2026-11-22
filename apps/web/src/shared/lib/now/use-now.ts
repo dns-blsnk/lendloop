@@ -33,9 +33,12 @@ function subscribe(onTick: () => void): () => void {
   };
 }
 
-/** Fresh when nothing is subscribed (a first render after a long pause), else the shared tick. */
+/**
+ * The shared tick. With nothing subscribed (a first render, possibly after a long pause) it is
+ * refreshed once it is a tick old, but stays the same between React's repeated reads.
+ */
 function readNow(): number {
-  if (listeners.size === 0) {
+  if (listeners.size === 0 && Date.now() - current >= TICK_MS) {
     current = Date.now();
   }
   return current;

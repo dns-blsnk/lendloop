@@ -39,12 +39,17 @@ describe('availableActions', () => {
     expect(availableActions(future(LoanStatus.APPROVED), LoanParty.OWNER, TODAY)).toEqual([]);
   });
 
-  it('lets the borrower cancel an approved loan up to its first day', () => {
-    expect(availableActions(started(LoanStatus.APPROVED), LoanParty.BORROWER, TODAY)).toEqual([
+  it('lets the borrower cancel an approved loan only before its first day', () => {
+    expect(availableActions(future(LoanStatus.APPROVED), LoanParty.BORROWER, TODAY)).toEqual([
       LoanAction.CANCEL,
     ]);
-    const underWay = { status: LoanStatus.APPROVED, startDate: '2026-11-30' };
-    expect(availableActions(underWay, LoanParty.BORROWER, TODAY)).toEqual([]);
+    expect(availableActions(started(LoanStatus.APPROVED), LoanParty.BORROWER, TODAY)).toEqual([]);
+  });
+
+  it('lets the borrower withdraw a request on its first day', () => {
+    expect(availableActions(started(LoanStatus.REQUESTED), LoanParty.BORROWER, TODAY)).toEqual([
+      LoanAction.CANCEL,
+    ]);
   });
 
   it('lets only the owner mark an approved loan as returned', () => {

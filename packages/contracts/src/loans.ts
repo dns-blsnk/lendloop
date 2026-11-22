@@ -18,12 +18,6 @@ export type LoanStatus = (typeof LoanStatus)[keyof typeof LoanStatus];
 
 export const loanStatusSchema = z.enum(LoanStatus);
 
-/**
- * Statuses that hold the tool for their dates. A new request may not overlap them, and approving a
- * request re-checks overlap and auto-declines the competing requests.
- */
-export const BLOCKING_LOAN_STATUSES: readonly LoanStatus[] = [LoanStatus.APPROVED];
-
 export const LoanAction = {
   APPROVE: 'approve',
   DECLINE: 'decline',
@@ -53,6 +47,8 @@ export const LoanTiming = {
   ANY_TIME: 'anyTime',
   /** Up to and including the first day: before the tool changes hands. */
   UNTIL_START: 'untilStart',
+  /** Strictly before the first day: once it has come, the tool may already have changed hands. */
+  BEFORE_START: 'beforeStart',
   /** From the first day on: the tool can only come back once it has gone out. */
   FROM_START: 'fromStart',
 } as const;
@@ -67,6 +63,8 @@ export interface LoanTransition {
   /** The party that gets notified about the change. */
   notify: LoanParty;
   timing: LoanTiming;
+  /** A different timing for some source statuses. */
+  timingFrom?: Partial<Record<LoanStatus, LoanTiming>>;
 }
 
 /**
@@ -91,12 +89,15 @@ export const LOAN_TRANSITIONS: Readonly<Record<LoanAction, LoanTransition>> = {
     timing: LoanTiming.ANY_TIME,
   },
   [LoanAction.CANCEL]: {
-    // The borrower can back out until the loan starts, approved or not.
+    // The borrower can withdraw a request until its first day, and back out of an approved loan
+    // only before it: on the first day the owner may already have handed the tool over (and may
+    // mark it returned), so the two actions never overlap.
     from: [LoanStatus.REQUESTED, LoanStatus.APPROVED],
     to: LoanStatus.CANCELLED,
     by: LoanActor.BORROWER,
     notify: LoanParty.OWNER,
     timing: LoanTiming.UNTIL_START,
+    timingFrom: { [LoanStatus.APPROVED]: LoanTiming.BEFORE_START },
   },
   [LoanAction.MARK_RETURNED]: {
     from: [LoanStatus.APPROVED],
@@ -130,6 +131,8 @@ function timingAllows(timing: LoanTiming, startDate: IsoDate, today: IsoDate): b
       return true;
     case LoanTiming.UNTIL_START:
       return today <= startDate;
+    case LoanTiming.BEFORE_START:
+      return today < startDate;
     case LoanTiming.FROM_START:
       return today >= startDate;
   }
@@ -145,7 +148,8 @@ export function transitionProblem(
   if (!transition.from.includes(loan.status)) {
     return `A ${loan.status} loan cannot be changed this way.`;
   }
-  if (!timingAllows(transition.timing, loan.startDate, today)) {
+  const timing = transition.timingFrom?.[loan.status] ?? transition.timing;
+  if (!timingAllows(timing, loan.startDate, today)) {
     return 'This is not possible on this date any more.';
   }
   return null;

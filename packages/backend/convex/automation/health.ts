@@ -3,7 +3,7 @@ import { ErrorCode, MAX_HEALTH_ITEMS } from '@lendloop/contracts';
 import { internal } from '../_generated/api';
 import { domainError } from '../lib/errors';
 
-import { RECIPIENT_GONE } from './delivery';
+import { RECIPIENT_GONE, RECIPIENT_UNDELIVERABLE } from './delivery';
 import { OVERDUE_WORKFLOW } from './write_backs';
 
 import type { Id } from '../_generated/dataModel';
@@ -33,6 +33,7 @@ export async function automationHealth(ctx: QueryCtx): Promise<AutomationHealth>
     ctx.db
       .query('outboundEvents')
       .withIndex('by_status_nextAttemptAt', (q) => q.eq('status', 'failed'))
+      .order('desc')
       .take(MAX_FAILED_SCANNED),
     ctx.db.query('workflowErrors').order('desc').take(MAX_HEALTH_ITEMS),
   ]);
@@ -71,8 +72,8 @@ export async function retryFailedEvent(
   if (event?.status !== 'failed') {
     throw domainError(ErrorCode.CONFLICT, 'Only failed notifications can be sent again.');
   }
-  if (event.lastError === RECIPIENT_GONE) {
-    throw domainError(ErrorCode.CONFLICT, 'The recipient no longer exists; it cannot be sent.');
+  if (event.lastError === RECIPIENT_GONE || event.lastError === RECIPIENT_UNDELIVERABLE) {
+    throw domainError(ErrorCode.CONFLICT, 'This notification has no valid recipient to send to.');
   }
   await ctx.db.patch('outboundEvents', eventId, {
     status: 'pending',

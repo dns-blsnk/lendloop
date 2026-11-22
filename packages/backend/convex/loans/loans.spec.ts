@@ -233,6 +233,22 @@ describe('loans.act', () => {
     ).rejects.toMatchObject({ data: { code: ErrorCode.INVALID_TRANSITION } });
   });
 
+  it('refuses to cancel an approved loan on its first day, when the tool may have changed hands', async () => {
+    const { t, asBorrower, toolId, status } = await world();
+    const borrowerId = await userIdByEmail(t, borrower.email);
+    const loanId = await insertLoan(t, {
+      toolId,
+      borrowerId,
+      startDate: today,
+      endDate: day(2),
+      status: LoanStatus.APPROVED,
+    });
+    await expect(
+      asBorrower.mutation(api.loans.mutations.act, { loanId, action: LoanAction.CANCEL }),
+    ).rejects.toMatchObject({ data: { code: ErrorCode.INVALID_TRANSITION } });
+    expect(await status(loanId)).toBe(LoanStatus.APPROVED);
+  });
+
   it('accepts no system actions from clients', async () => {
     const { asOwner, asBorrower, request } = await world();
     const loanId = await request(asBorrower, 1, 2);

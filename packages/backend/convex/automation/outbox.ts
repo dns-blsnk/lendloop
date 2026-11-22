@@ -1,6 +1,7 @@
 import {
   EVENT_ID_HEADER,
   loanEventPayloadSchema,
+  N8N_WEBHOOK_PATH,
   sign,
   SIGNATURE_HEADER,
   TIMESTAMP_HEADER,
@@ -18,6 +19,7 @@ import {
   MAX_ATTEMPTS,
   NOT_CONFIGURED_RECHECK_MS,
   RECIPIENT_GONE,
+  RECIPIENT_UNDELIVERABLE,
   recordFailedAttempt,
 } from './delivery';
 
@@ -35,8 +37,6 @@ const HTTP_TOO_MANY_REQUESTS = 429;
 /** Client errors worth retrying: a timeout or "slow down". */
 const RETRYABLE_CLIENT_ERRORS: readonly number[] = [HTTP_REQUEST_TIMEOUT, HTTP_TOO_MANY_REQUESTS];
 
-export const WEBHOOK_PATH = 'lendloop-loan-event';
-
 /**
  * Takes the lease on a due event, counts the attempt and returns the payload, or null when it is
  * not due, already handled, or out of attempts (then it is marked failed).
@@ -52,9 +52,11 @@ export const claim = internalMutation({
     }
     const payload = await buildPayload(ctx, event);
     if (payload === null || event.attempts >= MAX_ATTEMPTS) {
+      const recipient = await ctx.db.get('users', event.recipientId);
+      const reason = recipient === null ? RECIPIENT_GONE : RECIPIENT_UNDELIVERABLE;
       await ctx.db.patch('outboundEvents', eventId, {
         status: 'failed',
-        lastError: payload === null ? RECIPIENT_GONE : 'No attempts left.',
+        lastError: payload === null ? reason : 'No attempts left.',
         failedAt: now,
       });
       return null;
@@ -117,8 +119,9 @@ function isPermanentStatus(status: number): boolean {
 }
 
 /**
- * Sends one event to n8n, signed. Delivery is at least once: if n8n accepted an event but the
- * acknowledgement here was lost, it is sent again with the same event id, and n8n drops repeats.
+ * Sends one event to n8n, signed. Delivery is at least once: if n8n sent the email but its answer
+ * was lost (timeout, dropped connection), the event is sent again and the email can repeat. The
+ * README lists closing this gap (n8n claiming the event first) as a production change.
  */
 export const deliver = internalAction({
   args: { eventId: zid('outboundEvents') },
@@ -136,7 +139,7 @@ export const deliver = internalAction({
     const body = JSON.stringify(payload);
     const timestamp = unixSeconds();
     try {
-      const response = await fetch(`${env.N8N_WEBHOOK_BASE_URL}/${WEBHOOK_PATH}`, {
+      const response = await fetch(`${env.N8N_WEBHOOK_BASE_URL}/${N8N_WEBHOOK_PATH}`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { N8N_ENDPOINTS } from './http';
+import { N8N_ENDPOINTS, N8N_WEBHOOK_PATH } from './http';
 import { SIGNATURE_HEADER, SIGNATURE_TOLERANCE_SECONDS, TIMESTAMP_HEADER } from './signature';
 
 /**
@@ -29,6 +29,6 @@ describe('n8n workflows follow the integration contract', () => {
   });
 
   it('serve the webhook path Convex posts to', () => {
-    expect(workflows).toContain('"path": "lendloop-loan-event"');
+    expect(workflows).toContain(`"path": "${N8N_WEBHOOK_PATH}"`);
   });
 });

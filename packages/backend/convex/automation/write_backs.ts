@@ -4,6 +4,7 @@ import {
   DeliveryStatus,
   ErrorCode,
   firstNameOf,
+  isDeliverableEmail,
   LoanStatus,
   notificationKey,
   parseReminderKey,
@@ -18,10 +19,14 @@ import type { IsoDate, LoanActivity, LoanEventType, OverdueLoan } from '@lendloo
 
 export const OVERDUE_WORKFLOW = 'overdue-reminders';
 
-/** Most reminders one run returns; the rest come with the next run. */
+/** Most reminders one run returns. */
 const MAX_REMINDERS_PER_RUN = 200;
-/** Most overdue loans one run looks through to find those not reminded yet today. */
-const MAX_OVERDUE_SCANNED = 2000;
+/**
+ * Most overdue loans one run looks at. Each costs three reads (the reminder key, the borrower,
+ * the tool), so this keeps a run well inside Convex's per-transaction read limit.
+ */
+const MAX_OVERDUE_SCANNED = 500;
+const MS_PER_DAY = 86_400_000;
 
 interface ActivityRecord {
   idempotencyKey: string;
@@ -92,37 +97,49 @@ export async function recordHeartbeat(ctx: MutationCtx, name: string): Promise<v
 }
 
 /**
- * Approved loans past their last day that have not had a successful reminder on `today`. Loans
- * already reminded are skipped before the limit applies, so a long list is worked through in turn.
+ * Starts each day's run at a different place in the overdue list, so when more loans are overdue
+ * than one run sends, every one of them is reached over the following days.
  */
+function rotateForDay<T>(items: readonly T[], today: IsoDate): T[] {
+  if (items.length === 0) {
+    return [];
+  }
+  const start = ((Date.parse(today) / MS_PER_DAY) * MAX_REMINDERS_PER_RUN) % items.length;
+  return [...items.slice(start), ...items.slice(0, start)];
+}
+
+/** Approved loans past their last day that have not had a successful reminder on `today`. */
 export async function listOverdueLoans(ctx: QueryCtx, today: IsoDate): Promise<OverdueLoan[]> {
   const late = await ctx.db
     .query('loans')
     .withIndex('by_status_endDate', (q) => q.eq('status', LoanStatus.APPROVED).lt('endDate', today))
     .take(MAX_OVERDUE_SCANNED);
-  const due: OverdueLoan[] = [];
-  for (const loan of late) {
-    if (due.length === MAX_REMINDERS_PER_RUN) {
-      break;
-    }
-    const key = reminderKey(loan._id, today);
-    const [done, borrower, tool] = await Promise.all([
-      findByKey(ctx, key),
-      ctx.db.get('users', loan.borrowerId),
-      ctx.db.get('tools', loan.toolId),
-    ]);
-    if (done?.status !== DeliveryStatus.SENT && borrower !== null && tool !== null) {
-      due.push({
+  const rows = await Promise.all(
+    rotateForDay(late, today).map(async (loan) => {
+      const key = reminderKey(loan._id, today);
+      const [done, borrower, tool] = await Promise.all([
+        findByKey(ctx, key),
+        ctx.db.get('users', loan.borrowerId),
+        ctx.db.get('tools', loan.toolId),
+      ]);
+      // An address that is not deliverable is skipped rather than failing the whole run.
+      if (done?.status === DeliveryStatus.SENT || borrower === null || tool === null) {
+        return null;
+      }
+      if (!isDeliverableEmail(borrower.email)) {
+        return null;
+      }
+      return {
         loanId: loan._id,
         reminderKey: key,
         borrower: { firstName: firstNameOf(borrower.name), email: borrower.email },
         toolName: tool.name,
         endDate: loan.endDate,
         daysOverdue: daysBetween(loan.endDate, today),
-      });
-    }
-  }
-  return due;
+      };
+    }),
+  );
+  return rows.filter((row) => row !== null).slice(0, MAX_REMINDERS_PER_RUN);
 }
 
 export async function recordReminder(

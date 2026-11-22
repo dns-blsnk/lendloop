@@ -23,3 +23,10 @@ export function firstNameOf(name: string): string {
   const trimmed = name.trim();
   return trimmed.split(/\s+/)[0] ?? trimmed;
 }
+
+const emailSchema = z.email();
+
+/** Whether an address passes the same check the n8n payload contracts apply. */
+export function isDeliverableEmail(email: string): boolean {
+  return emailSchema.safeParse(email).success;
+}

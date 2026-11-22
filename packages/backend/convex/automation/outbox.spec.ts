@@ -202,4 +202,24 @@ describe('notification outbox', () => {
     await t.finishAllScheduledFunctions(vi.runAllTimers);
     expect((await events())[0]).toMatchObject({ status: 'failed', lastError: 'No attempts left.' });
   });
+
+  it('fails an event at once when the recipient address is not deliverable', async () => {
+    const sent = stubN8n(200);
+    const { t, events } = await world();
+    await t.run(async (ctx) => {
+      const ownerRecord = await ctx.db
+        .query('users')
+        .withIndex('by_email', (q) => q.eq('email', owner.email))
+        .unique();
+      if (ownerRecord !== null) {
+        await ctx.db.patch('users', ownerRecord._id, { email: 'not-an-address' });
+      }
+    });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    expect(sent).toHaveLength(0);
+    expect((await events())[0]).toMatchObject({
+      status: 'failed',
+      lastError: "The recipient's email address is not valid.",
+    });
+  });
 });

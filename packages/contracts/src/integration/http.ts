@@ -13,6 +13,9 @@ export const N8N_ENDPOINTS = {
   WORKFLOW_ERRORS: '/n8n/workflow-errors',
 } as const;
 
+/** The n8n webhook path Convex posts loan events to (under N8N_WEBHOOK_BASE_URL). */
+export const N8N_WEBHOOK_PATH = 'lendloop-loan-event';
+
 /** Largest request body accepted from n8n. */
 export const MAX_N8N_REQUEST_BYTES = 16_384;
 

@@ -1,4 +1,4 @@
-import { firstNameOf } from '@lendloop/contracts';
+import { firstNameOf, isDeliverableEmail } from '@lendloop/contracts';
 
 import type { Doc, Id } from '../_generated/dataModel';
 import type { MutationCtx, QueryCtx } from '../_generated/server';
@@ -20,17 +20,21 @@ export const MAX_ATTEMPTS = RETRY_DELAYS_MS.length + 1;
 
 /** Why an event can never be delivered, so "send again" is refused for it. */
 export const RECIPIENT_GONE = 'The recipient no longer exists.';
+export const RECIPIENT_UNDELIVERABLE = "The recipient's email address is not valid.";
 
 /** While n8n is not configured, events wait this long between checks without using attempts. */
 export const NOT_CONFIGURED_RECHECK_MS = TEN_MINUTES_MS;
 
-/** The event as sent: its snapshot plus the recipient's current address. Null if they are gone. */
+/**
+ * The event as sent: its snapshot plus the recipient's current address. Null when the recipient
+ * is gone or their address would fail the payload contract, so the event fails instead of looping.
+ */
 export async function buildPayload(
   ctx: QueryCtx,
   event: Doc<'outboundEvents'>,
 ): Promise<LoanEventPayload | null> {
   const recipient = await ctx.db.get('users', event.recipientId);
-  if (recipient === null) {
+  if (recipient === null || !isDeliverableEmail(recipient.email)) {
     return null;
   }
   return {
