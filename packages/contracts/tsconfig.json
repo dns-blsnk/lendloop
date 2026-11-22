@@ -1,4 +1,8 @@
 {
   "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Web Crypto and TextEncoder without browser-only globals such as window or document.
+    "lib": ["ES2023", "WebWorker"]
+  },
   "include": ["src", "vitest.config.ts"]
 }

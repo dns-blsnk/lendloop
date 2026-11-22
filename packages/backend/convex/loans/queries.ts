@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { userQuery } from '../functions';
 import { displayDay } from '../lib/today';
 
-import { loansAsBorrower, loansAsOwner } from './model';
+import { loansAsBorrower, loansAsOwner } from './views';
 
 const loanViews = z.array(loanViewSchema.extend({ id: zid('loans'), toolId: zid('tools') }));
 

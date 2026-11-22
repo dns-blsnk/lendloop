@@ -11,4 +11,7 @@ crons.daily(
   internal.loans.internal.expireStale,
 );
 
+// Picks up outgoing n8n events whose delivery job was lost.
+crons.interval('sweep the notification outbox', { minutes: 10 }, internal.automation.outbox.sweep);
+
 export default crons;

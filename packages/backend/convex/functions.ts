@@ -4,9 +4,10 @@
  * `mutation` from `_generated/server` are banned elsewhere by ESLint.
  */
 import { customCtx, NoOp } from 'convex-helpers/server/customFunctions';
-import { zCustomMutation, zCustomQuery } from 'convex-helpers/server/zod4';
+import { zCustomAction, zCustomMutation, zCustomQuery } from 'convex-helpers/server/zod4';
 
 import {
+  internalAction as rawInternalAction,
   internalMutation as rawInternalMutation,
   internalQuery as rawInternalQuery,
   mutation as rawMutation,
@@ -46,3 +47,4 @@ export const adminMutation = zCustomMutation(
 /** Not callable from clients: the CLI, the scheduler and signed HTTP actions only. */
 export const internalQuery = zCustomQuery(rawInternalQuery, NoOp);
 export const internalMutation = zCustomMutation(rawInternalMutation, NoOp);
+export const internalAction = zCustomAction(rawInternalAction, NoOp);

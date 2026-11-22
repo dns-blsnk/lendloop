@@ -3,6 +3,7 @@ export * from './audit';
 export * from './brand';
 export * from './dates';
 export * from './errors';
+export * from './integration';
 export * from './loans';
 export * from './permissions';
 export * from './roles';

@@ -1,32 +1,27 @@
 import {
-  FORMER_NEIGHBOUR_NAME,
   REMOVED_TOOL_NAME,
   AuditAction,
-  availableActions,
   ErrorCode,
-  isPartyLoanAction,
   LOAN_TRANSITIONS,
   LoanAction,
+  LoanEventType,
   LoanParty,
   LoanStatus,
-  MAX_FINISHED_LOANS_PER_LIST,
   MAX_OPEN_REQUESTS_PER_BORROWER,
   rangesOverlap,
   SYSTEM_ACTOR,
   todayUtc,
-  ToolStatus,
   transitionProblem,
 } from '@lendloop/contracts';
 
 import { recordAudit } from '../audit';
-import { isOverdue, isUnderWay } from '../domain/availability';
+import { enqueueLoanEvent } from '../automation';
+import { isUnderWay } from '../domain/availability';
 import { domainError } from '../lib/errors';
 
 import type { Doc, Id } from '../_generated/dataModel';
 import type { MutationCtx, QueryCtx } from '../_generated/server';
-import type { IsoDate, LoanDates, LoanView, PartyLoanAction } from '@lendloop/contracts';
-
-export type LoanViewWithIds = LoanView & { id: Id<'loans'>; toolId: Id<'tools'> };
+import type { IsoDate, LoanDates, PartyLoanAction } from '@lendloop/contracts';
 
 const AUDIT_ACTION_FOR: Readonly<Record<LoanAction, AuditAction>> = {
   [LoanAction.APPROVE]: AuditAction.LOAN_APPROVED,
@@ -37,7 +32,15 @@ const AUDIT_ACTION_FOR: Readonly<Record<LoanAction, AuditAction>> = {
   [LoanAction.WITHDRAW_FOR_REMOVED_TOOL]: AuditAction.LOAN_WITHDRAWN,
 };
 
-const FORMER_NEIGHBOUR = { name: FORMER_NEIGHBOUR_NAME, isTrustedLender: false };
+/** What the notified party is told for each status change. */
+const EVENT_FOR: Readonly<Record<LoanAction, LoanEventType>> = {
+  [LoanAction.APPROVE]: LoanEventType.APPROVED,
+  [LoanAction.DECLINE]: LoanEventType.DECLINED,
+  [LoanAction.CANCEL]: LoanEventType.CANCELLED,
+  [LoanAction.MARK_RETURNED]: LoanEventType.RETURNED,
+  [LoanAction.AUTO_DECLINE]: LoanEventType.AUTO_DECLINED,
+  [LoanAction.WITHDRAW_FOR_REMOVED_TOOL]: LoanEventType.WITHDRAWN,
+};
 
 export function loansOfTool(
   ctx: QueryCtx,
@@ -57,8 +60,8 @@ export function approvedLoansOfTool(ctx: QueryCtx, toolId: Id<'tools'>): Promise
 
 /**
  * The single place a loan changes status: checks the transition table (status and timing against
- * the server clock), writes the change and its audit entry. Notifications for `transition.notify`
- * hang off this function as well.
+ * the server clock), writes the change and its audit entry, and queues the notification for the
+ * party the table names, all in one transaction.
  */
 async function applyTransition(
   ctx: MutationCtx,
@@ -78,6 +81,18 @@ async function applyTransition(
     actorId,
     loanId: loan._id,
     toolId: loan.toolId,
+  });
+  const tool = await ctx.db.get('tools', loan.toolId);
+  await enqueueLoanEvent(ctx, {
+    type: EVENT_FOR[action],
+    loanId: loan._id,
+    recipientId: transition.notify === LoanParty.OWNER ? loan.ownerId : loan.borrowerId,
+    snapshot: {
+      toolName: tool?.name ?? REMOVED_TOOL_NAME,
+      startDate: loan.startDate,
+      endDate: loan.endDate,
+      status: transition.to,
+    },
   });
 }
 
@@ -171,10 +186,16 @@ export async function requestLoan(
     loanId,
     toolId: tool._id,
   });
+  await enqueueLoanEvent(ctx, {
+    type: LoanEventType.REQUESTED,
+    loanId,
+    recipientId: tool.ownerId,
+    snapshot: { toolName: tool.name, ...dates, status: LoanStatus.REQUESTED },
+  });
   return loanId;
 }
 
-function partyOf(loan: Doc<'loans'>, viewer: Doc<'users'>): LoanParty | null {
+export function partyOf(loan: Doc<'loans'>, viewer: Doc<'users'>): LoanParty | null {
   if (loan.ownerId === viewer._id) {
     return LoanParty.OWNER;
   }
@@ -241,88 +262,4 @@ export async function expireStaleRequests(
     await applyTransition(ctx, loan, LoanAction.AUTO_DECLINE, SYSTEM_ACTOR);
   }
   return { expired: batch.length, hasMore: stale.length > STALE_REQUESTS_PER_RUN };
-}
-
-async function toLoanViews(
-  ctx: QueryCtx,
-  loans: readonly Doc<'loans'>[],
-  viewer: Doc<'users'>,
-  today: IsoDate,
-): Promise<LoanViewWithIds[]> {
-  const own = loans.flatMap((loan) => {
-    const party = partyOf(loan, viewer);
-    return party === null ? [] : [{ loan, party }];
-  });
-  return Promise.all(
-    own.map(async ({ loan, party }) => {
-      const counterpartId = party === LoanParty.OWNER ? loan.borrowerId : loan.ownerId;
-      const [tool, counterpart] = await Promise.all([
-        ctx.db.get('tools', loan.toolId),
-        ctx.db.get('users', counterpartId),
-      ]);
-      const person = counterpart ?? FORMER_NEIGHBOUR;
-      return {
-        id: loan._id,
-        toolId: loan.toolId,
-        status: loan.status,
-        startDate: loan.startDate,
-        endDate: loan.endDate,
-        isOverdue: isOverdue(loan, today),
-        toolName: tool?.name ?? REMOVED_TOOL_NAME,
-        isToolListed: tool?.status === ToolStatus.ACTIVE,
-        counterpart: { name: person.name, isTrustedLender: person.isTrustedLender },
-        actions: availableActions(loan, party, today).filter(isPartyLoanAction),
-      };
-    }),
-  );
-}
-
-const OPEN_STATUSES = [LoanStatus.REQUESTED, LoanStatus.APPROVED] as const;
-const FINISHED_STATUSES = [LoanStatus.DECLINED, LoanStatus.CANCELLED, LoanStatus.RETURNED] as const;
-
-/**
- * Every open loan on one side (requests and approved loans, so nothing actionable is ever cut
- * off) plus the most recent finished ones, newest first.
- */
-async function loansOnSide(
-  ctx: QueryCtx,
-  side: 'ownerId' | 'borrowerId',
-  userId: Id<'users'>,
-): Promise<Doc<'loans'>[]> {
-  const index = side === 'ownerId' ? 'by_owner_status' : 'by_borrower_status';
-  const byStatus = (status: LoanStatus, limit?: number) => {
-    const query = ctx.db
-      .query('loans')
-      .withIndex(index, (q) => q.eq(side, userId).eq('status', status))
-      .order('desc');
-    return limit === undefined ? query.collect() : query.take(limit);
-  };
-  const open = await Promise.all(OPEN_STATUSES.map((status) => byStatus(status)));
-  const finished = (
-    await Promise.all(
-      FINISHED_STATUSES.map((status) => byStatus(status, MAX_FINISHED_LOANS_PER_LIST)),
-    )
-  )
-    .flat()
-    .sort((a, b) => b._creationTime - a._creationTime)
-    .slice(0, MAX_FINISHED_LOANS_PER_LIST);
-  return [...open.flat(), ...finished].sort((a, b) => b._creationTime - a._creationTime);
-}
-
-/** Loans the viewer asked for ("My requests"). */
-export async function loansAsBorrower(
-  ctx: QueryCtx,
-  viewer: Doc<'users'>,
-  today: IsoDate,
-): Promise<LoanViewWithIds[]> {
-  return toLoanViews(ctx, await loansOnSide(ctx, 'borrowerId', viewer._id), viewer, today);
-}
-
-/** Requests and loans on the viewer's tools ("Incoming requests"). */
-export async function loansAsOwner(
-  ctx: QueryCtx,
-  viewer: Doc<'users'>,
-  today: IsoDate,
-): Promise<LoanViewWithIds[]> {
-  return toLoanViews(ctx, await loansOnSide(ctx, 'ownerId', viewer._id), viewer, today);
 }
