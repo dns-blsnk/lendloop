@@ -1,0 +1,28 @@
+{
+  "name": "@lendloop/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "next typegen && tsc --noEmit",
+    "lint:fsd": "steiger ./src"
+  },
+  "dependencies": {
+    "@lendloop/contracts": "workspace:*",
+    "next": "16.4.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@feature-sliced/steiger-plugin": "0.8.2",
+    "@tailwindcss/turbopack": "4.3.3",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "steiger": "0.10.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3"
+  }
+}

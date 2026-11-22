@@ -1,0 +1,6 @@
+pnpm-lock.yaml
+**/.next/
+**/convex/_generated/
+**/coverage/
+TASK.md
+**/.turbo/
