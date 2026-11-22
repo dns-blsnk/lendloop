@@ -1,0 +1,32 @@
+# deps
+node_modules/
+
+# next
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# env & secrets
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# docker volumes / local data
+.docker-data/
+
+# ide / os
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+
+# logs
+*.log
+npm-debug.log*
+
+# local tooling
+.ua/
+.mcp.json
+coverage/
