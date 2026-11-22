@@ -46,13 +46,14 @@ jobs:
       - name: n8n exports are current and free of secrets
         run: pnpm n8n:check
 
-      # Public values only (the publishable key and Convex URL end up in the browser bundle anyway);
-      # set them as repository variables. The build validates them and fails fast without them.
+      # Public values only (the publishable key and Convex URL end up in the browser bundle anyway),
+      # taken from repository variables. Until those are set, well-formed placeholders let CI prove
+      # the app compiles and prerenders; the resulting bundle is never deployed.
       - name: Build
         run: pnpm build
         env:
-          NEXT_PUBLIC_CONVEX_URL: ${{ vars.NEXT_PUBLIC_CONVEX_URL }}
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          NEXT_PUBLIC_CONVEX_URL: ${{ vars.NEXT_PUBLIC_CONVEX_URL || 'http://127.0.0.1:3210' }}
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsuZXhhbXBsZS5jb20k' }}
 
   # Separate job: a fresh upstream advisory shows up as its own red check instead of hiding the
   # result of lint, typecheck, tests and build.
@@ -69,6 +70,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
 
       - name: Audit production dependencies
         run: pnpm audit --prod --audit-level high
